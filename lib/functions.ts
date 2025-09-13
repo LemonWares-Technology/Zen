@@ -28,7 +28,7 @@ export default async function getAmadeusToken(): Promise<string> {
 
     const data: any = await response.json();
 
-    console.log("Token generated successfully");
+    console.log(`Token generated successfully: ${data.access_token}`);
 
     // Return just the access token string, not a NextResponse
     return data.access_token;
