@@ -1,205 +1,3 @@
-// // This is your Prisma schema file,
-// // learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// // Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// // Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-// generator client {
-//   provider = "prisma-client-js"
-// }
-
-// datasource db {
-//   provider = "postgresql"
-//   url      = env("DATABASE_URL")
-// }
-
-// // Simple & Scalable Travel Booking System Schema
-// // Designed for millions of users with essential features only
-
-// // User Authentication
-// model User {
-//   id          String    @id @default(cuid())
-//   email       String    @unique
-//   firstName   String?
-//   lastName    String?
-//   phone       String?
-//   password    String? // Hashed password
-//   isVerified  Boolean   @default(false)
-//   isActive    Boolean   @default(true)
-//   lastLoginAt DateTime?
-//   createdAt   DateTime  @default(now())
-//   updatedAt   DateTime  @updatedAt
-//   role        String
-
-//   // Relations
-//   bookings Booking[]
-//   payments Payment[]
-//   reviews  Review[]
-//   tokens   Token[]
-
-//   @@index([email])
-//   @@index([isActive])
-//   @@map("users")
-// }
-
-// // Token Management (verification, password reset, sessions)
-// model Token {
-//   id        String    @id @default(cuid())
-//   userId    String
-//   token     String    @unique
-//   type      TokenType
-//   expiresAt DateTime
-//   used      Boolean   @default(false)
-//   createdAt DateTime  @default(now())
-
-//   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-//   @@index([token, type])
-//   @@index([expiresAt])
-//   @@map("tokens")
-// }
-
-// // Admin Management
-// model Admin {
-//   id          String    @id @default(cuid())
-//   email       String    @unique
-//   firstName   String?
-//   lastName    String?
-//   isActive    Boolean   @default(true)
-//   lastLoginAt DateTime?
-//   createdAt   DateTime  @default(now())
-
-//   // Relations
-//   otpCodes AdminOTP[]
-
-//   @@index([email])
-//   @@map("admins")
-// }
-
-// // Admin OTP for secure login
-// model AdminOTP {
-//   id        String   @id @default(cuid())
-//   adminId   String
-//   code      String   @unique
-//   expiresAt DateTime
-//   used      Boolean  @default(false)
-//   createdAt DateTime @default(now())
-
-//   admin Admin @relation(fields: [adminId], references: [id], onDelete: Cascade)
-
-//   @@index([code])
-//   @@index([expiresAt])
-//   @@map("admin_otps")
-// }
-
-// // Core Booking System
-// model Booking {
-//   id            String        @id @default(cuid())
-//   bookingNumber String        @unique
-//   userId        String? // Nullable for guest bookings
-//   guestEmail    String? // For guest bookings
-//   guestName     String? // For guest bookings
-//   guestPhone    String? // For guest bookings
-//   bookingType   BookingType
-//   status        BookingStatus @default(PENDING)
-//   totalAmount   Decimal       @db.Decimal(10, 2)
-//   currency      String        @default("USD")
-//   bookingData   Json // Store all booking details (flight, hotel, car, tour data)
-//   amadeusRef    String? // Amadeus booking reference
-//   createdAt     DateTime      @default(now())
-//   updatedAt     DateTime      @updatedAt
-
-//   // Relations
-//   user     User?     @relation(fields: [userId], references: [id])
-//   payments Payment[]
-
-//   @@index([bookingNumber])
-//   @@index([userId])
-//   @@index([status])
-//   @@index([createdAt])
-//   @@map("bookings")
-// }
-
-// // Payment System
-// model Payment {
-//   id            String        @id @default(cuid())
-//   bookingId     String
-//   userId        String?
-//   amount        Decimal       @db.Decimal(10, 2)
-//   currency      String        @default("USD")
-//   method        PaymentMethod
-//   provider      String // Stripe, PayPal, etc.
-//   transactionId String?
-//   status        PaymentStatus @default(PENDING)
-//   metadata      Json?
-//   createdAt     DateTime      @default(now())
-//   updatedAt     DateTime      @updatedAt
-
-//   booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
-//   user    User?   @relation(fields: [userId], references: [id])
-
-//   @@index([transactionId])
-//   @@index([status])
-//   @@map("payments")
-// }
-
-// // Reviews System
-// model Review {
-//   id          String      @id @default(cuid())
-//   userId      String
-//   bookingId   String
-//   bookingType BookingType
-//   rating      Int // 1-5 stars
-//   comment     String?
-//   isVerified  Boolean     @default(false)
-//   createdAt   DateTime    @default(now())
-
-//   user User @relation(fields: [userId], references: [id])
-
-//   @@index([bookingType])
-//   @@index([rating])
-//   @@map("reviews")
-// }
-
-// // Simple Enums
-// enum TokenType {
-//   EMAIL_VERIFICATION
-//   PASSWORD_RESET
-//   REFRESH_TOKEN
-// }
-
-// enum BookingType {
-//   FLIGHT
-//   HOTEL
-//   CAR
-//   TOUR
-//   PACKAGE
-// }
-
-// enum BookingStatus {
-//   PENDING
-//   CONFIRMED
-//   CANCELLED
-//   COMPLETED
-// }
-
-// enum PaymentMethod {
-//   CARD
-//   PAYPAL
-//   BANK_TRANSFER
-// }
-
-// enum PaymentStatus {
-//   PENDING
-//   COMPLETED
-//   FAILED
-//   REFUNDED
-// }
-
-// enum Role {
-//   USER
-//   ADMIN
-// }
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -227,10 +25,12 @@ model User {
   role        String
 
   // Relations
-  bookings Booking[]
-  payments Payment[]
-  reviews  Review[]
-  tokens   Token[]
+  bookings  Booking[]
+  payments  Payment[]
+  reviews   Review[]
+  tokens    Token[]
+  cart      Cart?
+  cartItems CartItem[]
 
   @@index([email])
   @@index([isActive])
@@ -287,6 +87,63 @@ model AdminOTP {
   @@map("admin_otps")
 }
 
+// Cart System - Main cart container
+model Cart {
+  id        String    @id @default(cuid())
+  userId    String?   @unique // Nullable for guest carts
+  sessionId String?   @unique // For guest users before registration
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  expiresAt DateTime? // Optional expiry for guest carts
+
+  // Relations
+  user  User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items CartItem[]
+
+  @@index([sessionId])
+  @@index([expiresAt])
+  @@map("carts")
+}
+
+// Cart Items - Individual flight offers in cart
+model CartItem {
+  id               String   @id @default(cuid())
+  cartId           String
+  userId           String? // For direct user association
+  flightOfferData  Json // Complete Amadeus flight offer data
+  searchParams     Json // Original search parameters used
+  priceData        Json? // Cached pricing data if available
+  quantity         Int      @default(1)
+  selectedServices Json? // Selected ancillary services
+  isTemporary      Boolean  @default(false) // For guest items before migration
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  // Relations
+  cart Cart  @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([cartId])
+  @@index([userId])
+  @@index([isTemporary])
+  @@map("cart_items")
+}
+
+// Guest Migration Tracker - Track guest sessions for migration
+model GuestMigration {
+  id         String    @id @default(cuid())
+  sessionId  String    @unique
+  guestEmail String? // Email provided during guest browsing
+  migratedTo String? // User ID after migration
+  itemsCount Int       @default(0)
+  createdAt  DateTime  @default(now())
+  migratedAt DateTime?
+
+  @@index([sessionId])
+  @@index([guestEmail])
+  @@map("guest_migrations")
+}
+
 // Core Booking System
 model Booking {
   id            String        @id @default(cuid())
@@ -301,6 +158,7 @@ model Booking {
   currency      String        @default("USD")
   bookingData   Json // Store all booking details (flight, hotel, car, tour data)
   amadeusRef    String? // Amadeus booking reference
+  cartItemId    String? // Reference to original cart item
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 
@@ -312,6 +170,7 @@ model Booking {
   @@index([bookingNumber])
   @@index([userId])
   @@index([status])
+  @@index([cartItemId])
   @@index([createdAt])
   @@map("bookings")
 }
