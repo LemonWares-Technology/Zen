@@ -1,5 +1,9 @@
-import getAmadeusToken, { baseURL } from "@/lib/functions";
+// /app/api/booking/flight/route.ts
+import { PrismaClient } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
+import getAmadeusToken, { baseURL } from "@/lib/functions";
+
+const prisma = new PrismaClient();
 
 // Helper function to fetch airport details from Amadeus API
 async function fetchAirportDetails(iataCode: string, token: string) {
@@ -112,7 +116,6 @@ async function enrichFlightSegments(segments: any[], token: string) {
         icaoCode: airlineDetails.icaoCode,
       },
       flightNumber: `${segment.carrierCode}${segment.number}`,
-      // Calculate flight duration in a more readable format
       durationFormatted: formatDuration(segment.duration),
     };
 
@@ -144,12 +147,10 @@ function formatDuration(duration: string): string {
 async function enrichBookingData(bookingData: any, token: string) {
   const enrichedBooking = { ...bookingData };
 
-  // Enrich flight offers
   if (enrichedBooking.data?.flightOffers) {
     for (let i = 0; i < enrichedBooking.data.flightOffers.length; i++) {
       const flightOffer = enrichedBooking.data.flightOffers[i];
 
-      // Enrich itineraries
       if (flightOffer.itineraries) {
         for (let j = 0; j < flightOffer.itineraries.length; j++) {
           const itinerary = flightOffer.itineraries[j];
@@ -159,7 +160,6 @@ async function enrichBookingData(bookingData: any, token: string) {
               token
             );
 
-            // Add itinerary summary
             const firstSegment = itinerary.segments[0];
             const lastSegment =
               itinerary.segments[itinerary.segments.length - 1];
@@ -185,7 +185,6 @@ async function enrichBookingData(bookingData: any, token: string) {
         }
       }
 
-      // Add flight offer summary
       flightOffer.summary = {
         tripType:
           flightOffer.itineraries?.length === 1 ? "One Way" : "Round Trip",
@@ -202,7 +201,6 @@ async function enrichBookingData(bookingData: any, token: string) {
     }
   }
 
-  // Add enriched traveler information
   if (enrichedBooking.data?.travelers) {
     enrichedBooking.data.travelers = enrichedBooking.data.travelers.map(
       (traveler: any) => ({
@@ -221,7 +219,6 @@ async function enrichBookingData(bookingData: any, token: string) {
     );
   }
 
-  // Add booking metadata
   const associatedRecord = enrichedBooking.data?.associatedRecords?.[0];
   enrichedBooking.metadata = {
     bookingReference: associatedRecord?.reference,
@@ -274,18 +271,51 @@ function calculateAge(dateOfBirth: string): number {
 
 export async function POST(request: NextRequest) {
   try {
-    const { selectedFlightOffer, travelers, contacts, payments } =
-      await request.json();
+    const body = await request.json();
+    const {
+      userId,
+      guestEmail,
+      guestName,
+      guestPhone,
+      selectedFlightOffer,
+      travelers,
+      contacts,
+      payments,
+      cartItemId,
+    } = body;
 
+    // Validate required fields
     if (!selectedFlightOffer || !travelers || !contacts) {
       return NextResponse.json(
         {
           message:
             "Missing required parameters: selectedFlightOffer, travelers, contacts",
+          error: "MISSING_FLIGHT_DATA",
         },
         { status: 400 }
       );
     }
+
+    // Must have either userId or guest details
+    if (!userId && (!guestEmail || !guestName)) {
+      return NextResponse.json(
+        {
+          message: "Either userId or guest details (email, name) are required",
+          error: "MISSING_USER_INFO",
+        },
+        { status: 400 }
+      );
+    }
+
+    // Get total amount from flight offer
+    const totalAmount = parseFloat(selectedFlightOffer.price?.total || "0");
+    const currency = selectedFlightOffer.price?.currency || "USD";
+
+    // Generate unique booking number
+    const bookingNumber = `FLT${Date.now()}${Math.random()
+      .toString(36)
+      .substr(2, 6)
+      .toUpperCase()}`;
 
     const token = await getAmadeusToken();
 
@@ -312,7 +342,11 @@ export async function POST(request: NextRequest) {
     if (!pricingResponse.ok) {
       const text = await pricingResponse.text();
       return NextResponse.json(
-        { message: "Pricing error", details: text },
+        {
+          message: "Flight pricing validation failed",
+          error: "PRICING_ERROR",
+          details: text,
+        },
         { status: pricingResponse.status }
       );
     }
@@ -330,7 +364,10 @@ export async function POST(request: NextRequest) {
       validatedFlightOffers = [pricingData.data];
     } else {
       return NextResponse.json(
-        { message: "Invalid pricing response structure" },
+        {
+          message: "Invalid pricing response structure",
+          error: "INVALID_PRICING_RESPONSE",
+        },
         { status: 500 }
       );
     }
@@ -361,48 +398,172 @@ export async function POST(request: NextRequest) {
     if (!bookingResponse.ok) {
       const text = await bookingResponse.text();
       return NextResponse.json(
-        { message: "Booking error", details: text },
+        {
+          message: "Amadeus flight booking failed",
+          error: "AMADEUS_BOOKING_ERROR",
+          details: text,
+        },
         { status: bookingResponse.status }
       );
     }
 
-    const bookingData = await bookingResponse.json();
+    const amadeusBookingData = await bookingResponse.json();
 
     // Step 4: Enrich the booking data with real Amadeus API data
     console.log("Enriching booking data with Amadeus APIs...");
+    let enrichedBooking;
 
     try {
-      const enrichedBooking = await enrichBookingData(bookingData, token);
-
-      return NextResponse.json(
-        {
-          message: "Booking completed successfully",
-          booking: enrichedBooking,
-        },
-        { status: 200 }
-      );
+      enrichedBooking = await enrichBookingData(amadeusBookingData, token);
     } catch (enrichmentError) {
       console.error("Error during data enrichment:", enrichmentError);
-
-      // If enrichment fails, return original data
-      return NextResponse.json(
-        {
-          message:
-            "Booking completed successfully (enrichment partially failed)",
-          booking: bookingData,
-          enrichmentError:
-            enrichmentError instanceof Error
-              ? enrichmentError.message
-              : String(enrichmentError),
-        },
-        { status: 200 }
-      );
+      enrichedBooking = amadeusBookingData; // Use original data if enrichment fails
     }
-  } catch (error: any) {
-    console.error("Error during booking flow:", error);
+
+    // Step 5: Save to database with enriched Amadeus data
+    const bookingData = {
+      amadeusBooking: enrichedBooking, // Complete enriched Amadeus response
+      originalFlightOffer: selectedFlightOffer, // Original selected offer
+      travelers: travelers,
+      contacts: contacts,
+      payments: payments || [],
+      bookingDate: new Date().toISOString(),
+      source: "web_booking",
+    };
+
+    // Extract Amadeus booking reference
+    const amadeusRef =
+      enrichedBooking?.data?.associatedRecords?.[0]?.reference ||
+      enrichedBooking?.metadata?.bookingReference ||
+      null;
+
+    // Create booking in database
+    const booking = await prisma.booking.create({
+      data: {
+        bookingNumber,
+        userId: userId || null,
+        guestEmail: guestEmail || null,
+        guestName: guestName || null,
+        guestPhone: guestPhone || null,
+        bookingType: "FLIGHT",
+        status: "CONFIRMED", // Amadeus booking successful means confirmed
+        totalAmount: totalAmount,
+        currency: currency,
+        bookingData: bookingData, // All flight data stored here
+        amadeusRef: amadeusRef,
+        cartItemId: cartItemId || null,
+      },
+    });
+
+    // Create initial payment record if payment info provided
+    if (payments && payments.length > 0) {
+      for (const payment of payments) {
+        await prisma.payment.create({
+          data: {
+            bookingId: booking.id,
+            userId: userId || null,
+            amount: totalAmount,
+            currency: currency,
+            method: payment.method || "CARD",
+            provider: "amadeus", // Since payment went through Amadeus
+            transactionId: payment.id || null,
+            status: "COMPLETED", // Amadeus booking successful means payment completed
+            metadata: payment,
+          },
+        });
+      }
+    }
+
+    // Remove from cart if cartItemId provided
+    if (cartItemId) {
+      try {
+        await prisma.cartItem.delete({
+          where: { id: cartItemId },
+        });
+      } catch (cartError) {
+        console.warn("Failed to remove item from cart:", cartError);
+        // Don't fail the booking if cart removal fails
+      }
+    }
+
+    // Prepare response with flight summary
+    const flightOffer = enrichedBooking?.data?.flightOffers?.[0];
+    const firstItinerary = flightOffer?.itineraries?.[0];
+    const returnItinerary = flightOffer?.itineraries?.[1];
+
+    const bookingResponses = {
+      bookingId: booking.id,
+      bookingNumber: booking.bookingNumber,
+      status: booking.status,
+      amadeusReference: amadeusRef,
+      flight: {
+        tripType:
+          flightOffer?.summary?.tripType ||
+          (returnItinerary ? "Round Trip" : "One Way"),
+        outbound: firstItinerary?.summary
+          ? {
+              origin: firstItinerary.summary.origin,
+              destination: firstItinerary.summary.destination,
+              departure: firstItinerary.segments?.[0]?.departure?.at,
+              arrival:
+                firstItinerary.segments?.[firstItinerary.segments.length - 1]
+                  ?.arrival?.at,
+              duration: firstItinerary.summary.totalDuration,
+              stops: firstItinerary.summary.totalStops,
+              airlines: firstItinerary.summary.airlines,
+            }
+          : null,
+        return: returnItinerary?.summary
+          ? {
+              origin: returnItinerary.summary.origin,
+              destination: returnItinerary.summary.destination,
+              departure: returnItinerary.segments?.[0]?.departure?.at,
+              arrival:
+                returnItinerary.segments?.[returnItinerary.segments.length - 1]
+                  ?.arrival?.at,
+              duration: returnItinerary.summary.totalDuration,
+              stops: returnItinerary.summary.totalStops,
+              airlines: returnItinerary.summary.airlines,
+            }
+          : null,
+        price: {
+          total: flightOffer?.price?.total,
+          currency: flightOffer?.price?.currency,
+          cabinClass: flightOffer?.summary?.cabinClass,
+        },
+      },
+      travelers:
+        enrichedBooking?.data?.travelers?.map((t: any) => ({
+          name: t.fullName,
+          age: t.age,
+          type: t.travelerType,
+        })) || [],
+      totalAmount: totalAmount,
+      currency: currency,
+      createdAt: booking.createdAt,
+    };
+
     return NextResponse.json(
-      { message: `Internal server error: ${error.message || error}` },
+      {
+        message: "Flight booking completed successfully",
+        data: bookingResponses,
+        enrichedBooking: enrichedBooking, // Full enriched data for reference
+      },
+      { status: 201 }
+    );
+  } catch (error: any) {
+    console.error("Error during flight booking process:", error);
+
+    return NextResponse.json(
+      {
+        message: "Internal server error during flight booking",
+        error: "BOOKING_FAILED",
+        details:
+          process.env.NODE_ENV === "development" ? error.message : undefined,
+      },
       { status: 500 }
     );
   }
 }
+
+
