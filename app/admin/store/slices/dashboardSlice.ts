@@ -56,15 +56,21 @@ export const fetchDashboardData = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try {
       const response = await fetch("/api/admin/dashboard");
-      const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || "Failed to fetch dashboard data");
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+
+      if (!data || !data.data) {
+        throw new Error("Invalid response format from server");
       }
 
       return data.data;
     } catch (error: any) {
-      return rejectWithValue(error.message);
+      console.error("Dashboard data fetch error:", error);
+      return rejectWithValue(error.message || "Failed to fetch dashboard data");
     }
   }
 );

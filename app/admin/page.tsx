@@ -6,6 +6,7 @@ import { fetchDashboardData } from "./store/slices/dashboardSlice";
 import { showError, showSuccess } from "./store/slices/toastSlice";
 import LoadingSpinner from "./components/LoadingSpinner";
 import SkeletonLoader from "./components/SkeletonLoader";
+import SystemTest from "./components/SystemTest";
 import {
   Users,
   Calendar,
@@ -139,6 +140,9 @@ export default function AdminDashboard() {
 
   return (
     <div className="space-y-6">
+      {/* System Test - Remove in production */}
+      <SystemTest />
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>

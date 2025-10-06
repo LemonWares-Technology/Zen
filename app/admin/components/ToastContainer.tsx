@@ -44,15 +44,20 @@ export default function ToastContainer() {
   };
 
   useEffect(() => {
+    const timers: NodeJS.Timeout[] = [];
+    
     toasts.forEach((toast) => {
       if (toast.duration && toast.duration > 0) {
         const timer = setTimeout(() => {
           dispatch(removeToast(toast.id));
         }, toast.duration);
-
-        return () => clearTimeout(timer);
+        timers.push(timer);
       }
     });
+
+    return () => {
+      timers.forEach(timer => clearTimeout(timer));
+    };
   }, [toasts, dispatch]);
 
   if (toasts.length === 0) return null;

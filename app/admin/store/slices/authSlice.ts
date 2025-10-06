@@ -1,4 +1,4 @@
-import { createSlice, PayloadAction, createAsyncThunk } from '@reduxjs/toolkit';
+import { createSlice, PayloadAction, createAsyncThunk } from "@reduxjs/toolkit";
 
 interface User {
   id: string;
@@ -26,23 +26,23 @@ const initialState: AuthState = {
 
 // Async thunks
 export const checkAuth = createAsyncThunk(
-  'auth/checkAuth',
+  "auth/checkAuth",
   async (_, { rejectWithValue }) => {
     try {
-      const token = localStorage.getItem('admin_token');
+      const token = localStorage.getItem("admin_token");
       if (!token) {
-        throw new Error('No token found');
+        throw new Error("No token found");
       }
 
-      const response = await fetch('/api/admin/auth/verify-token', {
+      const response = await fetch("/api/admin/auth/verify-token", {
         headers: {
-          'Authorization': `Bearer ${token}`
-        }
+          Authorization: `Bearer ${token}`,
+        },
       });
 
       if (!response.ok) {
-        localStorage.removeItem('admin_token');
-        throw new Error('Token verification failed');
+        localStorage.removeItem("admin_token");
+        throw new Error("Token verification failed");
       }
 
       const data = await response.json();
@@ -54,33 +54,41 @@ export const checkAuth = createAsyncThunk(
 );
 
 export const login = createAsyncThunk(
-  'auth/login',
-  async (credentials: { email: string; password: string }, { rejectWithValue }) => {
+  "auth/login",
+  async (
+    credentials: { email: string; password: string },
+    { rejectWithValue }
+  ) => {
     try {
-      const response = await fetch('/api/admin/auth/login', {
-        method: 'POST',
+      const response = await fetch("/api/admin/auth/login", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify(credentials),
       });
 
-      const data = await response.json();
-
       if (!response.ok) {
-        throw new Error(data.message || 'Login failed');
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
-      localStorage.setItem('admin_token', data.token);
+      const data = await response.json();
+
+      if (!data || !data.token) {
+        throw new Error("Invalid response format from server");
+      }
+
+      localStorage.setItem("admin_token", data.token);
       return { token: data.token, user: data.user };
     } catch (error: any) {
-      return rejectWithValue(error.message);
+      console.error("Login error:", error);
+      return rejectWithValue(error.message || "Login failed");
     }
   }
 );
 
 const authSlice = createSlice({
-  name: 'auth',
+  name: "auth",
   initialState,
   reducers: {
     logout: (state) => {
@@ -88,7 +96,7 @@ const authSlice = createSlice({
       state.user = null;
       state.token = null;
       state.error = null;
-      localStorage.removeItem('admin_token');
+      localStorage.removeItem("admin_token");
     },
     clearError: (state) => {
       state.error = null;
