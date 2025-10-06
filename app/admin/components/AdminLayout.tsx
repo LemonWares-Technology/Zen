@@ -6,6 +6,7 @@ import { checkAuth } from "../store/slices/authSlice";
 import Sidebar from "./Sidebar";
 import TopNavigation from "./TopNavigation";
 import ToastContainer from "./ToastContainer";
+import ErrorBoundary from "./ErrorBoundary";
 
 export default function AdminLayout({
   children,
@@ -36,24 +37,26 @@ export default function AdminLayout({
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Sidebar />
-      <div
-        className={`
-        transition-all duration-300 ease-in-out
-        ${isCollapsed ? "lg:pl-16" : "lg:pl-64"}
-      `}
-      >
-        <TopNavigation />
-        <main className="flex-1">
-          <div className="py-6">
-            <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-              {children}
+    <ErrorBoundary>
+      <div className="min-h-screen bg-gray-50">
+        <Sidebar />
+        <div
+          className={`
+          transition-all duration-300 ease-in-out
+          ${isCollapsed ? "lg:pl-16" : "lg:pl-64"}
+        `}
+        >
+          <TopNavigation />
+          <main className="flex-1">
+            <div className="py-6">
+              <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+                <ErrorBoundary>{children}</ErrorBoundary>
+              </div>
             </div>
-          </div>
-        </main>
+          </main>
+        </div>
+        <ToastContainer />
       </div>
-      <ToastContainer />
-    </div>
+    </ErrorBoundary>
   );
 }
