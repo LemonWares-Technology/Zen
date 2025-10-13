@@ -1,8 +1,16 @@
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
+import { verifyAdminToken, createAuthErrorResponse } from "@/lib/admin-auth";
 
 export async function GET(request: NextRequest) {
   try {
+    // Verify admin authentication
+    const authResult = await verifyAdminToken(request);
+    if (!authResult.isValid) {
+      return createAuthErrorResponse(
+        authResult.error || "Authentication failed"
+      );
+    }
     const searchParams = request.nextUrl.searchParams;
     const page = parseInt(searchParams.get("page") || "1");
     const limit = parseInt(searchParams.get("limit") || "20");
@@ -64,9 +72,13 @@ export async function GET(request: NextRequest) {
     // Filter customers with bookings if requested
     let filteredCustomers = customers;
     if (hasBookings === "true") {
-      filteredCustomers = customers.filter(customer => customer._count.bookings > 0);
+      filteredCustomers = customers.filter(
+        (customer: any) => customer._count.bookings > 0
+      );
     } else if (hasBookings === "false") {
-      filteredCustomers = customers.filter(customer => customer._count.bookings === 0);
+      filteredCustomers = customers.filter(
+        (customer: any) => customer._count.bookings === 0
+      );
     }
 
     // Get customer statistics
@@ -81,7 +93,7 @@ export async function GET(request: NextRequest) {
     });
 
     // Transform customers data
-    const transformedCustomers = filteredCustomers.map((customer) => ({
+    const transformedCustomers = filteredCustomers.map((customer: any) => ({
       id: customer.id,
       email: customer.email,
       name: `${customer.firstName} ${customer.lastName}`,
@@ -109,11 +121,11 @@ export async function GET(request: NextRequest) {
           pages: Math.ceil(totalCount / limit),
         },
         statistics: {
-          byVerification: customerStats.map((stat) => ({
+          byVerification: customerStats.map((stat: any) => ({
             isVerified: stat.isVerified,
             count: stat._count.id,
           })),
-          byActive: activeStats.map((stat) => ({
+          byActive: activeStats.map((stat: any) => ({
             isActive: stat.isActive,
             count: stat._count.id,
           })),
@@ -134,6 +146,13 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    // Verify admin authentication
+    const authResult = await verifyAdminToken(request);
+    if (!authResult.isValid) {
+      return createAuthErrorResponse(
+        authResult.error || "Authentication failed"
+      );
+    }
     const body = await request.json();
     const {
       email,
@@ -223,6 +242,13 @@ export async function POST(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
+    // Verify admin authentication
+    const authResult = await verifyAdminToken(request);
+    if (!authResult.isValid) {
+      return createAuthErrorResponse(
+        authResult.error || "Authentication failed"
+      );
+    }
     const body = await request.json();
     const {
       customerId,
@@ -301,6 +327,13 @@ export async function PATCH(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
+    // Verify admin authentication
+    const authResult = await verifyAdminToken(request);
+    if (!authResult.isValid) {
+      return createAuthErrorResponse(
+        authResult.error || "Authentication failed"
+      );
+    }
     const searchParams = request.nextUrl.searchParams;
     const customerId = searchParams.get("customerId");
 
@@ -339,7 +372,8 @@ export async function DELETE(request: NextRequest) {
     if (customer._count.bookings > 0) {
       return NextResponse.json(
         {
-          message: "Cannot delete customer with existing bookings. Please deactivate instead.",
+          message:
+            "Cannot delete customer with existing bookings. Please deactivate instead.",
         },
         { status: 400 }
       );

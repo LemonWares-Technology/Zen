@@ -13,6 +13,20 @@ import {
   XCircle,
   AlertCircle,
 } from "lucide-react";
+import { useAppDispatch } from "../store/hooks";
+import { showError, showSuccess } from "../store/slices/toastSlice";
+import { apiClient } from "@/lib/api-client";
+import LoadingSpinner from "../components/LoadingSpinner";
+import SkeletonLoader from "../components/SkeletonLoader";
+import DataTable from "../components/DataTable";
+import Tooltip from "../components/Tooltip";
+import PageHeader from "../components/PageHeader";
+import ActionButton from "../components/ActionButton";
+import SearchBar from "../components/SearchBar";
+import Modal from "../components/Modal";
+import FormField from "../components/FormField";
+import Badge from "../components/Badge";
+import Card from "../components/Card";
 
 interface Booking {
   id: string;
@@ -41,6 +55,7 @@ interface Booking {
 }
 
 export default function BookingsPage() {
+  const dispatch = useAppDispatch();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -60,6 +75,7 @@ export default function BookingsPage() {
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
 
   useEffect(() => {
     fetchBookings();
@@ -68,7 +84,9 @@ export default function BookingsPage() {
   const fetchBookings = async () => {
     try {
       setLoading(true);
-      const params = new URLSearchParams({
+      setError("");
+
+      const params = {
         page: pagination.page.toString(),
         limit: pagination.limit.toString(),
         ...(searchTerm && { search: searchTerm }),
@@ -76,19 +94,21 @@ export default function BookingsPage() {
         ...(filters.type && { type: filters.type }),
         ...(filters.startDate && { startDate: filters.startDate }),
         ...(filters.endDate && { endDate: filters.endDate }),
-      });
+      };
 
-      const response = await fetch(`/api/admin/bookings?${params}`);
-      const data = await response.json();
+      const data = await apiClient.get<{
+        data: {
+          bookings: Booking[];
+          pagination: typeof pagination;
+        };
+      }>("/api/admin/bookings", params);
 
-      if (response.ok) {
-        setBookings(data.data.bookings);
-        setPagination(data.data.pagination);
-      } else {
-        setError(data.message || "Failed to fetch bookings");
-      }
-    } catch (error) {
-      setError("Network error. Please try again.");
+      setBookings(data.data.bookings);
+      setPagination(data.data.pagination);
+    } catch (error: any) {
+      const errorMessage = error.message || "Failed to fetch bookings";
+      setError(errorMessage);
+      dispatch(showError("Failed to load bookings", errorMessage));
     } finally {
       setLoading(false);
     }
@@ -119,28 +139,28 @@ export default function BookingsPage() {
     if (!selectedBooking) return;
 
     try {
-      const response = await fetch("/api/admin/bookings", {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          bookingId: selectedBooking.id,
-          ...updatedData,
-        }),
+      setActionLoading(true);
+
+      await apiClient.patch("/api/admin/bookings", {
+        bookingId: selectedBooking.id,
+        ...updatedData,
       });
 
-      const data = await response.json();
-
-      if (response.ok) {
-        setShowEditModal(false);
-        setSelectedBooking(null);
-        fetchBookings();
-      } else {
-        setError(data.message || "Failed to update booking");
-      }
-    } catch (error) {
-      setError("Network error. Please try again.");
+      setShowEditModal(false);
+      setSelectedBooking(null);
+      dispatch(
+        showSuccess(
+          "Booking updated successfully",
+          "Booking information has been updated"
+        )
+      );
+      fetchBookings();
+    } catch (error: any) {
+      const errorMessage = error.message || "Failed to update booking";
+      setError(errorMessage);
+      dispatch(showError("Failed to update booking", errorMessage));
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -148,29 +168,29 @@ export default function BookingsPage() {
     if (!selectedBooking) return;
 
     try {
-      const response = await fetch(
-        `/api/admin/bookings?bookingId=${selectedBooking.id}`,
-        {
-          method: "DELETE",
-        }
+      setActionLoading(true);
+
+      await apiClient.delete("/api/admin/bookings", {
+        bookingId: selectedBooking.id,
+      });
+
+      setShowDeleteModal(false);
+      setSelectedBooking(null);
+      dispatch(
+        showSuccess("Booking deleted successfully", "Booking has been removed")
       );
-
-      const data = await response.json();
-
-      if (response.ok) {
-        setShowDeleteModal(false);
-        setSelectedBooking(null);
-        fetchBookings();
-      } else {
-        setError(data.message || "Failed to delete booking");
-      }
-    } catch (error) {
-      setError("Network error. Please try again.");
+      fetchBookings();
+    } catch (error: any) {
+      const errorMessage = error.message || "Failed to delete booking";
+      setError(errorMessage);
+      dispatch(showError("Failed to delete booking", errorMessage));
+    } finally {
+      setActionLoading(false);
     }
   };
 
-  const formatCurrency = (amount: number, currency: string = "USD") => {
-    return new Intl.NumberFormat("en-US", {
+  const formatCurrency = (amount: number, currency: string = "NGN") => {
+    return new Intl.NumberFormat("en-NG", {
       style: "currency",
       currency: currency,
     }).format(amount);
@@ -217,33 +237,48 @@ export default function BookingsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1
-          className="text-2xl font-bold text-gray-900"
-          style={{ fontFamily: "Red Hat Display, sans-serif" }}
-        >
-          Booking Management
-        </h1>
-        <p className="mt-1 text-sm text-gray-600">
-          Manage and track all customer bookings
-        </p>
-      </div>
+      <PageHeader
+        title="Booking Management"
+        description="Manage and track all customer bookings"
+        tooltip="View, edit, and manage all customer bookings in the system"
+        actions={
+          <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+            <ActionButton
+              icon={Filter}
+              label="Filter"
+              onClick={() => {}}
+              variant="secondary"
+              size="sm"
+            />
+            <ActionButton
+              icon={Calendar}
+              label="Export"
+              onClick={() => {}}
+              variant="secondary"
+              size="sm"
+            />
+          </div>
+        }
+      />
 
       {/* Search and Filters */}
-      <div className="bg-white p-6 rounded-lg shadow">
+      <Card
+        title="Search & Filters"
+        description="Filter bookings by various criteria"
+      >
         <form onSubmit={handleSearch} className="space-y-4">
-          <div className="flex flex-col md:flex-row gap-4">
+          <div className="flex flex-col lg:flex-row gap-4">
             <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <input
-                  type="text"
+              <FormField
+                label="Search Bookings"
+                helpText="Search by booking number, customer name, or email"
+              >
+                <SearchBar
                   placeholder="Search bookings by number, customer name, or email..."
                   value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                  onChange={setSearchTerm}
                 />
-              </div>
+              </FormField>
             </div>
             <div className="flex gap-2">
               <select
@@ -304,127 +339,120 @@ export default function BookingsPage() {
             </div>
           </div>
         </form>
-      </div>
+      </Card>
 
       {/* Bookings Table */}
-      <div className="bg-white shadow rounded-lg overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Booking
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Customer
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Type
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Status
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Amount
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Date
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {loading ? (
-                <tr>
-                  <td colSpan={7} className="px-6 py-4 text-center">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500 mx-auto"></div>
-                  </td>
-                </tr>
-              ) : bookings.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={7}
-                    className="px-6 py-4 text-center text-gray-500"
-                  >
-                    No bookings found
-                  </td>
-                </tr>
-              ) : (
-                bookings.map((booking) => (
-                  <tr key={booking.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div>
-                        <div className="text-sm font-medium text-gray-900">
-                          {booking.bookingNumber}
-                        </div>
-                        <div className="text-sm text-gray-500">
-                          {booking.amadeusRef && `Ref: ${booking.amadeusRef}`}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div>
-                        <div className="text-sm font-medium text-gray-900">
-                          {booking.customer.name}
-                        </div>
-                        <div className="text-sm text-gray-500">
-                          {booking.customer.email}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
-                        {booking.type}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        {getStatusIcon(booking.status)}
-                        <span
-                          className={`ml-2 inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(
-                            booking.status
-                          )}`}
-                        >
-                          {booking.status}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {formatCurrency(booking.totalAmount, booking.currency)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {formatDate(booking.createdAt)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <div className="flex items-center space-x-2">
-                        <button
-                          onClick={() => handleEditBooking(booking)}
-                          className="text-orange-600 hover:text-orange-900"
-                          title="Edit booking"
-                        >
-                          <Edit className="h-4 w-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteBooking(booking)}
-                          className="text-red-600 hover:text-red-900"
-                          title="Delete booking"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+      <DataTable
+        columns={[
+          {
+            key: "booking",
+            label: "Booking",
+            render: (_, booking) => (
+              <div>
+                <div className="text-sm font-medium text-gray-900">
+                  {booking.bookingNumber}
+                </div>
+                <div className="text-sm text-gray-500">
+                  {booking.amadeusRef && `Ref: ${booking.amadeusRef}`}
+                </div>
+              </div>
+            ),
+          },
+          {
+            key: "customer",
+            label: "Customer",
+            render: (_, booking) => (
+              <div>
+                <div className="text-sm font-medium text-gray-900">
+                  {booking.customer.name}
+                </div>
+                <div className="text-sm text-gray-500">
+                  {booking.customer.email}
+                </div>
+              </div>
+            ),
+          },
+          {
+            key: "type",
+            label: "Type",
+            render: (_, booking) => (
+              <Badge variant="info">{booking.type}</Badge>
+            ),
+            mobileHidden: true,
+          },
+          {
+            key: "status",
+            label: "Status",
+            render: (_, booking) => (
+              <div className="flex items-center">
+                {getStatusIcon(booking.status)}
+                <Badge
+                  variant={
+                    booking.status === "CONFIRMED"
+                      ? "success"
+                      : booking.status === "PENDING"
+                      ? "warning"
+                      : booking.status === "CANCELLED"
+                      ? "danger"
+                      : "default"
+                  }
+                  className="ml-2"
+                >
+                  {booking.status}
+                </Badge>
+              </div>
+            ),
+          },
+          {
+            key: "amount",
+            label: "Amount",
+            render: (_, booking) => (
+              <div className="text-sm text-gray-900">
+                {formatCurrency(booking.totalAmount, booking.currency)}
+              </div>
+            ),
+            mobileHidden: true,
+          },
+          {
+            key: "date",
+            label: "Date",
+            render: (_, booking) => (
+              <div className="text-sm text-gray-500">
+                {formatDate(booking.createdAt)}
+              </div>
+            ),
+            mobileHidden: true,
+          },
+        ]}
+        data={bookings}
+        loading={loading}
+        emptyMessage="No bookings found"
+        actions={(booking) => (
+          <div className="flex items-center space-x-2">
+            <ActionButton
+              icon={Edit}
+              label=""
+              onClick={() => handleEditBooking(booking)}
+              variant="secondary"
+              size="sm"
+              tooltip="Edit booking"
+            />
+            <ActionButton
+              icon={Trash2}
+              label=""
+              onClick={() => handleDeleteBooking(booking)}
+              variant="danger"
+              size="sm"
+              tooltip="Delete booking"
+            />
+          </div>
+        )}
+      />
 
-        {/* Pagination */}
-        {pagination.pages > 1 && (
-          <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
+      {/* Pagination */}
+      {pagination.pages > 1 && (
+        <Card className="mt-6">
+          <div className="flex items-center justify-between">
             <div className="flex-1 flex justify-between sm:hidden">
               <button
                 onClick={() =>
@@ -493,13 +521,14 @@ export default function BookingsPage() {
               </div>
             </div>
           </div>
-        )}
-      </div>
+        </Card>
+      )}
 
       {/* Edit Modal */}
       {showEditModal && selectedBooking && (
         <EditBookingModal
           booking={selectedBooking}
+          isOpen={showEditModal}
           onClose={() => setShowEditModal(false)}
           onSave={handleUpdateBooking}
         />
@@ -520,12 +549,14 @@ export default function BookingsPage() {
 // Edit Booking Modal Component
 function EditBookingModal({
   booking,
+  isOpen,
   onClose,
   onSave,
 }: {
   booking: Booking;
+  isOpen: boolean;
   onClose: () => void;
-  onSave: (data: Partial<Booking>) => void;
+  onSave: (data: Partial<Booking>) => Promise<void>;
 }) {
   const [formData, setFormData] = useState({
     status: booking.status,
@@ -540,97 +571,90 @@ function EditBookingModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-      <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-        <div className="mt-3">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">
-            Edit Booking
-          </h3>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Status
-              </label>
-              <select
-                value={formData.status}
-                onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, status: e.target.value }))
-                }
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-orange-500 focus:border-orange-500"
-              >
-                <option value="PENDING">Pending</option>
-                <option value="CONFIRMED">Confirmed</option>
-                <option value="CANCELLED">Cancelled</option>
-                <option value="COMPLETED">Completed</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Guest Name
-              </label>
-              <input
-                type="text"
-                value={formData.guestName}
-                onChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    guestName: e.target.value,
-                  }))
-                }
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-orange-500 focus:border-orange-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Guest Email
-              </label>
-              <input
-                type="email"
-                value={formData.guestEmail}
-                onChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    guestEmail: e.target.value,
-                  }))
-                }
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-orange-500 focus:border-orange-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Guest Phone
-              </label>
-              <input
-                type="tel"
-                value={formData.guestPhone}
-                onChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    guestPhone: e.target.value,
-                  }))
-                }
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-orange-500 focus:border-orange-500"
-              />
-            </div>
-            <div className="flex justify-end space-x-3">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="px-4 py-2 text-sm font-medium text-white bg-orange-600 rounded-md hover:bg-orange-700"
-              >
-                Save Changes
-              </button>
-            </div>
-          </form>
+    <Modal isOpen={isOpen} onClose={onClose} title="Edit Booking" size="md">
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700">
+            Status
+          </label>
+          <select
+            value={formData.status}
+            onChange={(e) =>
+              setFormData((prev) => ({ ...prev, status: e.target.value }))
+            }
+            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-orange-500 focus:border-orange-500"
+          >
+            <option value="PENDING">Pending</option>
+            <option value="CONFIRMED">Confirmed</option>
+            <option value="CANCELLED">Cancelled</option>
+            <option value="COMPLETED">Completed</option>
+          </select>
         </div>
-      </div>
-    </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700">
+            Guest Name
+          </label>
+          <input
+            type="text"
+            value={formData.guestName}
+            onChange={(e) =>
+              setFormData((prev) => ({
+                ...prev,
+                guestName: e.target.value,
+              }))
+            }
+            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-orange-500 focus:border-orange-500"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700">
+            Guest Email
+          </label>
+          <input
+            type="email"
+            value={formData.guestEmail}
+            onChange={(e) =>
+              setFormData((prev) => ({
+                ...prev,
+                guestEmail: e.target.value,
+              }))
+            }
+            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-orange-500 focus:border-orange-500"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700">
+            Guest Phone
+          </label>
+          <input
+            type="tel"
+            value={formData.guestPhone}
+            onChange={(e) =>
+              setFormData((prev) => ({
+                ...prev,
+                guestPhone: e.target.value,
+              }))
+            }
+            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-orange-500 focus:border-orange-500"
+          />
+        </div>
+        <div className="flex justify-end space-x-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            className="px-4 py-2 text-sm font-medium text-white bg-orange-600 rounded-md hover:bg-orange-700"
+          >
+            Save Changes
+          </button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 
@@ -645,7 +669,7 @@ function DeleteBookingModal({
   onConfirm: () => void;
 }) {
   return (
-    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+    <div className="fixed inset-0 bg-gray-600/50 backdrop-blur-sm overflow-y-auto h-full w-full z-50">
       <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
         <div className="mt-3">
           <h3 className="text-lg font-medium text-gray-900 mb-4">

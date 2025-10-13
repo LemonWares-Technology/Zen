@@ -15,6 +15,20 @@ import {
   RefreshCw,
   Wrench,
 } from "lucide-react";
+import { useAppDispatch } from "../store/hooks";
+import { showError, showSuccess } from "../store/slices/toastSlice";
+import { apiClient } from "@/lib/api-client";
+import LoadingSpinner from "../components/LoadingSpinner";
+import SkeletonLoader from "../components/SkeletonLoader";
+import PageHeader from "../components/PageHeader";
+import ActionButton from "../components/ActionButton";
+import Tooltip from "../components/Tooltip";
+import StatsCard from "../components/StatsCard";
+import Modal from "../components/Modal";
+import FormField from "../components/FormField";
+import Card from "../components/Card";
+import Badge from "../components/Badge";
+import LoadingButton from "../components/LoadingButton";
 
 interface SystemData {
   system: {
@@ -52,6 +66,7 @@ interface SystemData {
 }
 
 export default function SettingsPage() {
+  const dispatch = useAppDispatch();
   const [systemData, setSystemData] = useState<SystemData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -64,16 +79,17 @@ export default function SettingsPage() {
   const fetchSystemData = async () => {
     try {
       setLoading(true);
-      const response = await fetch("/api/admin/settings");
-      const data = await response.json();
+      setError("");
 
-      if (response.ok) {
-        setSystemData(data.data);
-      } else {
-        setError(data.message || "Failed to fetch system data");
-      }
-    } catch (error) {
-      setError("Network error. Please try again.");
+      const data = await apiClient.get<{ data: SystemData }>(
+        "/api/admin/settings"
+      );
+
+      setSystemData(data.data);
+    } catch (error: any) {
+      const errorMessage = error.message || "Failed to fetch system data";
+      setError(errorMessage);
+      dispatch(showError("Failed to load system data", errorMessage));
     } finally {
       setLoading(false);
     }
@@ -82,35 +98,36 @@ export default function SettingsPage() {
   const handleSystemAction = async (action: string, data?: any) => {
     try {
       setActionLoading(action);
-      const response = await fetch("/api/admin/settings", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ action, data }),
-      });
 
-      const result = await response.json();
-
-      if (response.ok) {
-        alert(result.message || "Action completed successfully");
-        if (action === "backup" || action === "clear_cache") {
-          fetchSystemData(); // Refresh data after these actions
+      const result = await apiClient.post<{ message: string }>(
+        "/api/admin/settings",
+        {
+          action,
+          data,
         }
-      } else {
-        alert(result.message || "Action failed");
+      );
+
+      dispatch(
+        showSuccess(
+          "Action completed",
+          result.message || "Action completed successfully"
+        )
+      );
+      if (action === "backup" || action === "clear_cache") {
+        fetchSystemData(); // Refresh data after these actions
       }
-    } catch (error) {
-      alert("Network error. Please try again.");
+    } catch (error: any) {
+      const errorMessage = error.message || "Action failed";
+      dispatch(showError("Action failed", errorMessage));
     } finally {
       setActionLoading(null);
     }
   };
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("en-US", {
+    return new Intl.NumberFormat("en-NG", {
       style: "currency",
-      currency: "USD",
+      currency: "NGN",
     }).format(amount);
   };
 
@@ -152,14 +169,24 @@ export default function SettingsPage() {
 
   if (loading) {
     return (
-      <div className="animate-pulse">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          {[...Array(4)].map((_, i) => (
-            <div key={i} className="bg-white p-6 rounded-lg shadow">
-              <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
-              <div className="h-8 bg-gray-200 rounded w-1/2"></div>
-            </div>
-          ))}
+      <div className="space-y-6">
+        {/* Header Skeleton */}
+        <div className="animate-pulse">
+          <div className="h-8 bg-gray-200 rounded w-1/3 mb-2"></div>
+          <div className="h-4 bg-gray-200 rounded w-2/3"></div>
+        </div>
+
+        {/* Stats Grid Skeleton */}
+        <SkeletonLoader
+          type="card"
+          count={4}
+          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"
+        />
+
+        {/* Content Skeleton */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <SkeletonLoader type="card" />
+          <SkeletonLoader type="card" />
         </div>
       </div>
     );
@@ -176,110 +203,56 @@ export default function SettingsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1
-          className="text-2xl font-bold text-gray-900"
-          style={{ fontFamily: "Red Hat Display, sans-serif" }}
-        >
-          System Settings
-        </h1>
-        <p className="mt-1 text-sm text-gray-600">
-          Monitor system performance and manage administrative tasks
-        </p>
-      </div>
+      <PageHeader
+        title="System Settings"
+        description="Monitor system performance and manage administrative tasks"
+        tooltip="Monitor system health, manage settings, and perform administrative tasks"
+      />
 
       {/* System Overview */}
       {systemData && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <div className="bg-white overflow-hidden shadow rounded-lg">
-            <div className="p-5">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <Server className="h-6 w-6 text-blue-600" />
-                </div>
-                <div className="ml-5 w-0 flex-1">
-                  <dl>
-                    <dt className="text-sm font-medium text-gray-500 truncate">
-                      System Uptime
-                    </dt>
-                    <dd className="text-lg font-medium text-gray-900">
-                      {systemData.system.systemUptime}%
-                    </dd>
-                  </dl>
-                </div>
-              </div>
-            </div>
-          </div>
+          <StatsCard
+            title="System Uptime"
+            value={`${systemData.system.systemUptime}%`}
+            icon={Server}
+            iconColor="text-blue-600"
+            tooltip="System availability percentage"
+          />
 
-          <div className="bg-white overflow-hidden shadow rounded-lg">
-            <div className="p-5">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <Activity className="h-6 w-6 text-green-600" />
-                </div>
-                <div className="ml-5 w-0 flex-1">
-                  <dl>
-                    <dt className="text-sm font-medium text-gray-500 truncate">
-                      Response Time
-                    </dt>
-                    <dd className="text-lg font-medium text-gray-900">
-                      {systemData.system.averageResponseTime}ms
-                    </dd>
-                  </dl>
-                </div>
-              </div>
-            </div>
-          </div>
+          <StatsCard
+            title="Response Time"
+            value={`${systemData.system.averageResponseTime}ms`}
+            icon={Activity}
+            iconColor="text-green-600"
+            tooltip="Average system response time"
+          />
 
-          <div className="bg-white overflow-hidden shadow rounded-lg">
-            <div className="p-5">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <AlertTriangle className="h-6 w-6 text-red-600" />
-                </div>
-                <div className="ml-5 w-0 flex-1">
-                  <dl>
-                    <dt className="text-sm font-medium text-gray-500 truncate">
-                      Error Rate
-                    </dt>
-                    <dd className="text-lg font-medium text-gray-900">
-                      {systemData.system.errorRate}%
-                    </dd>
-                  </dl>
-                </div>
-              </div>
-            </div>
-          </div>
+          <StatsCard
+            title="Error Rate"
+            value={`${systemData.system.errorRate}%`}
+            icon={AlertTriangle}
+            iconColor="text-red-600"
+            tooltip="System error rate percentage"
+          />
 
-          <div className="bg-white overflow-hidden shadow rounded-lg">
-            <div className="p-5">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <Database className="h-6 w-6 text-purple-600" />
-                </div>
-                <div className="ml-5 w-0 flex-1">
-                  <dl>
-                    <dt className="text-sm font-medium text-gray-500 truncate">
-                      Total Revenue
-                    </dt>
-                    <dd className="text-lg font-medium text-gray-900">
-                      {formatCurrency(systemData.system.totalRevenue)}
-                    </dd>
-                  </dl>
-                </div>
-              </div>
-            </div>
-          </div>
+          <StatsCard
+            title="Total Revenue"
+            value={formatCurrency(systemData.system.totalRevenue)}
+            icon={Database}
+            iconColor="text-purple-600"
+            tooltip="Total revenue generated by the system"
+          />
         </div>
       )}
 
       {/* System Statistics */}
       {systemData && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-white p-6 rounded-lg shadow">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">
-              System Statistics
-            </h3>
+          <Card
+            title="System Statistics"
+            description="Key system metrics and performance indicators"
+          >
             <div className="space-y-4">
               <div className="flex justify-between">
                 <span className="text-sm text-gray-600">Total Bookings</span>
@@ -308,12 +281,12 @@ export default function SettingsPage() {
                 </span>
               </div>
             </div>
-          </div>
+          </Card>
 
-          <div className="bg-white p-6 rounded-lg shadow">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">
-              Recent Activity (24h)
-            </h3>
+          <Card
+            title="Recent Activity (24h)"
+            description="System activity in the last 24 hours"
+          >
             <div className="space-y-4">
               <div className="flex justify-between">
                 <span className="text-sm text-gray-600">New Bookings</span>
@@ -340,16 +313,16 @@ export default function SettingsPage() {
                 </span>
               </div>
             </div>
-          </div>
+          </Card>
         </div>
       )}
 
       {/* System Alerts */}
       {systemData && systemData.alerts.length > 0 && (
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">
-            System Alerts
-          </h3>
+        <Card
+          title="System Alerts"
+          description="Current system alerts and notifications"
+        >
           <div className="space-y-3">
             {systemData.alerts.map((alert, index) => (
               <div
@@ -370,15 +343,15 @@ export default function SettingsPage() {
               </div>
             ))}
           </div>
-        </div>
+        </Card>
       )}
 
       {/* Maintenance Information */}
       {systemData && (
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">
-            Maintenance Information
-          </h3>
+        <Card
+          title="Maintenance Information"
+          description="System maintenance schedule and status"
+        >
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div>
               <h4 className="text-sm font-medium text-gray-500 mb-2">
@@ -418,44 +391,36 @@ export default function SettingsPage() {
               </div>
             </div>
           </div>
-        </div>
+        </Card>
       )}
 
       {/* System Actions */}
-      <div className="bg-white p-6 rounded-lg shadow">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">
-          System Actions
-        </h3>
+      <Card
+        title="System Actions"
+        description="Administrative actions and system maintenance"
+      >
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <button
+          <LoadingButton
             onClick={() => handleSystemAction("backup")}
-            disabled={actionLoading === "backup"}
-            className="flex items-center justify-center px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            loading={actionLoading === "backup"}
+            className="flex items-center justify-center px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-50"
           >
-            {actionLoading === "backup" ? (
-              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-orange-500 mr-2"></div>
-            ) : (
-              <Download className="h-5 w-5 text-gray-400 mr-2" />
-            )}
+            <Download className="h-5 w-5 text-gray-400 mr-2" />
             <span className="text-sm font-medium text-gray-700">
               Create Backup
             </span>
-          </button>
+          </LoadingButton>
 
-          <button
+          <LoadingButton
             onClick={() => handleSystemAction("clear_cache")}
-            disabled={actionLoading === "clear_cache"}
-            className="flex items-center justify-center px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            loading={actionLoading === "clear_cache"}
+            className="flex items-center justify-center px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-50"
           >
-            {actionLoading === "clear_cache" ? (
-              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-orange-500 mr-2"></div>
-            ) : (
-              <RefreshCw className="h-5 w-5 text-gray-400 mr-2" />
-            )}
+            <RefreshCw className="h-5 w-5 text-gray-400 mr-2" />
             <span className="text-sm font-medium text-gray-700">
               Clear Cache
             </span>
-          </button>
+          </LoadingButton>
 
           <button
             onClick={() =>
@@ -499,14 +464,14 @@ export default function SettingsPage() {
             </span>
           </button>
         </div>
-      </div>
+      </Card>
 
       {/* Performance Metrics */}
       {systemData && (
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">
-            Performance Metrics
-          </h3>
+        <Card
+          title="Performance Metrics"
+          description="System performance indicators and analytics"
+        >
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <h4 className="text-sm font-medium text-gray-500 mb-2">
@@ -539,14 +504,14 @@ export default function SettingsPage() {
               </div>
             </div>
           </div>
-        </div>
+        </Card>
       )}
 
       {/* Security Settings */}
-      <div className="bg-white p-6 rounded-lg shadow">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">
-          Security Settings
-        </h3>
+      <Card
+        title="Security Settings"
+        description="Configure security options and authentication settings"
+      >
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
@@ -588,7 +553,7 @@ export default function SettingsPage() {
             </button>
           </div>
         </div>
-      </div>
+      </Card>
     </div>
   );
 }

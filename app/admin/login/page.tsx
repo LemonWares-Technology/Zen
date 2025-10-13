@@ -27,7 +27,7 @@ export default function AdminLogin() {
   const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated && typeof window !== "undefined") {
       router.push("/admin");
     }
   }, [isAuthenticated, router]);
@@ -45,11 +45,15 @@ export default function AdminLogin() {
 
     try {
       await dispatch(login(formData)).unwrap();
-      showSuccess("Login successful", "Welcome to the admin dashboard");
+      dispatch(
+        showSuccess("Login successful", "Welcome to the admin dashboard")
+      );
     } catch (error: any) {
-      showError(
-        "Login failed",
-        error || "Please check your credentials and try again"
+      dispatch(
+        showError(
+          "Login failed",
+          error || "Please check your credentials and try again"
+        )
       );
     }
   };
@@ -69,10 +73,7 @@ export default function AdminLogin() {
           <div className="mx-auto h-16 w-16 bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl flex items-center justify-center shadow-lg">
             <span className="text-2xl font-bold text-white">Z</span>
           </div>
-          <h2
-            className="mt-6 text-3xl font-bold text-gray-900"
-            style={{ fontFamily: "Red Hat Display, sans-serif" }}
-          >
+          <h2 className="mt-6 text-3xl font-bold text-gray-900 font-sans">
             Zen Admin Portal
           </h2>
           <p className="mt-2 text-sm text-gray-600">

@@ -1,4 +1,5 @@
 import { createSlice, PayloadAction, createAsyncThunk } from "@reduxjs/toolkit";
+import { apiClient } from "@/lib/api-client";
 
 interface User {
   id: string;
@@ -29,26 +30,33 @@ export const checkAuth = createAsyncThunk(
   "auth/checkAuth",
   async (_, { rejectWithValue }) => {
     try {
+      // Only run on client-side to avoid hydration issues
+      if (typeof window === "undefined") {
+        return rejectWithValue("Client-side only");
+      }
+
       const token = localStorage.getItem("admin_token");
       if (!token) {
-        throw new Error("No token found");
+        // No token found, user needs to login - this is not an error
+        return rejectWithValue("No token found");
       }
 
-      const response = await fetch("/api/admin/auth/verify-token", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
+      // Check for old dev bypass token and clear it
+      if (token === "dev_bypass_token") {
         localStorage.removeItem("admin_token");
-        throw new Error("Token verification failed");
+        return rejectWithValue("No token found");
       }
 
-      const data = await response.json();
+      // Set the token in the API client
+      apiClient.setToken(token);
+
+      const data = await apiClient.get<{ user: User }>(
+        "/api/admin/auth/verify-token"
+      );
       return { token, user: data.user };
     } catch (error: any) {
-      return rejectWithValue(error.message);
+      console.error("Auth check error:", error);
+      return rejectWithValue(error.message || "Authentication failed");
     }
   }
 );
@@ -60,25 +68,21 @@ export const login = createAsyncThunk(
     { rejectWithValue }
   ) => {
     try {
-      const response = await fetch("/api/admin/auth/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(credentials),
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      // Only run on client-side to avoid hydration issues
+      if (typeof window === "undefined") {
+        throw new Error("Client-side only");
       }
 
-      const data = await response.json();
+      const data = await apiClient.post<{ token: string; user: User }>(
+        "/api/admin/auth/login",
+        credentials
+      );
 
       if (!data || !data.token) {
         throw new Error("Invalid response format from server");
       }
 
-      localStorage.setItem("admin_token", data.token);
+      apiClient.setToken(data.token);
       return { token: data.token, user: data.user };
     } catch (error: any) {
       console.error("Login error:", error);
@@ -96,7 +100,7 @@ const authSlice = createSlice({
       state.user = null;
       state.token = null;
       state.error = null;
-      localStorage.removeItem("admin_token");
+      apiClient.clearToken();
     },
     clearError: (state) => {
       state.error = null;
@@ -121,13 +125,31 @@ const authSlice = createSlice({
         state.token = action.payload.token;
         state.user = action.payload.user;
         state.error = null;
+        // Ensure token is stored in localStorage
+        if (typeof window !== "undefined") {
+          localStorage.setItem("admin_token", action.payload.token);
+        }
       })
       .addCase(checkAuth.rejected, (state, action) => {
+        console.log("Auth check rejected:", action.payload);
         state.isLoading = false;
         state.isAuthenticated = false;
         state.user = null;
         state.token = null;
-        state.error = action.payload as string;
+        // Don't set error for "No token found" or "Client-side only" - these are normal cases
+        if (
+          action.payload !== "No token found" &&
+          action.payload !== "Client-side only"
+        ) {
+          state.error = action.payload as string;
+        } else {
+          state.error = null;
+        }
+        // Clear any invalid token from localStorage
+        if (typeof window !== "undefined") {
+          localStorage.removeItem("admin_token");
+        }
+        apiClient.clearToken();
       })
       // Login
       .addCase(login.pending, (state) => {
@@ -140,6 +162,10 @@ const authSlice = createSlice({
         state.token = action.payload.token;
         state.user = action.payload.user;
         state.error = null;
+        // Store token in localStorage
+        if (typeof window !== "undefined") {
+          localStorage.setItem("admin_token", action.payload.token);
+        }
       })
       .addCase(login.rejected, (state, action) => {
         state.isLoading = false;

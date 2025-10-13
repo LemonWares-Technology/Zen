@@ -1,8 +1,16 @@
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
+import { verifyAdminToken, createAuthErrorResponse } from "@/lib/admin-auth";
 
 export async function GET(request: NextRequest) {
   try {
+    // Verify admin authentication
+    const authResult = await verifyAdminToken(request);
+    if (!authResult.isValid) {
+      return createAuthErrorResponse(
+        authResult.error || "Authentication failed"
+      );
+    }
     const searchParams = request.nextUrl.searchParams;
     const reportType = searchParams.get("type") || "summary";
     const startDate = searchParams.get("startDate");

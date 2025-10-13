@@ -27,9 +27,9 @@ export default class ErrorBoundary extends Component<Props, State> {
   }
 
   static getDerivedStateFromError(error: Error): Partial<State> {
-    // Generate unique error ID for tracking
-    const errorId = `error_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    
+    // Generate unique error ID for tracking (avoid hydration issues)
+    const errorId = `error_${Math.floor(Math.random() * 1000000)}`;
+
     return {
       hasError: true,
       error,
@@ -40,7 +40,7 @@ export default class ErrorBoundary extends Component<Props, State> {
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     // Log error details
     console.error("ErrorBoundary caught an error:", error, errorInfo);
-    
+
     // Update state with error info
     this.setState({
       errorInfo,
@@ -63,7 +63,7 @@ export default class ErrorBoundary extends Component<Props, State> {
     };
 
     console.error("Error Report:", errorReport);
-    
+
     // Example: Send to error tracking service
     // errorTrackingService.captureException(error, { extra: errorReport });
   };
@@ -105,7 +105,8 @@ export default class ErrorBoundary extends Component<Props, State> {
                   Something went wrong
                 </h1>
                 <p className="text-gray-600">
-                  We're sorry, but something unexpected happened. Our team has been notified.
+                  We're sorry, but something unexpected happened. Our team has
+                  been notified.
                 </p>
               </div>
 
@@ -117,7 +118,7 @@ export default class ErrorBoundary extends Component<Props, State> {
                     Error Details
                   </h3>
                 </div>
-                
+
                 <div className="space-y-3 text-sm">
                   <div>
                     <span className="font-medium text-gray-600">Error ID:</span>
@@ -125,24 +126,29 @@ export default class ErrorBoundary extends Component<Props, State> {
                       {this.state.errorId}
                     </span>
                   </div>
-                  
+
                   {this.state.error && (
                     <div>
-                      <span className="font-medium text-gray-600">Message:</span>
+                      <span className="font-medium text-gray-600">
+                        Message:
+                      </span>
                       <p className="mt-1 text-red-700 font-mono text-xs bg-red-50 p-2 rounded">
                         {this.state.error.message}
                       </p>
                     </div>
                   )}
-                  
-                  {process.env.NODE_ENV === "development" && this.state.error?.stack && (
-                    <div>
-                      <span className="font-medium text-gray-600">Stack Trace:</span>
-                      <pre className="mt-1 text-xs text-gray-600 bg-gray-100 p-3 rounded overflow-auto max-h-32">
-                        {this.state.error.stack}
-                      </pre>
-                    </div>
-                  )}
+
+                  {process.env.NODE_ENV === "development" &&
+                    this.state.error?.stack && (
+                      <div>
+                        <span className="font-medium text-gray-600">
+                          Stack Trace:
+                        </span>
+                        <pre className="mt-1 text-xs text-gray-600 bg-gray-100 p-3 rounded overflow-auto max-h-32">
+                          {this.state.error.stack}
+                        </pre>
+                      </div>
+                    )}
                 </div>
               </div>
 
@@ -155,7 +161,7 @@ export default class ErrorBoundary extends Component<Props, State> {
                   <RefreshCw className="h-5 w-5 mr-2" />
                   Try Again
                 </button>
-                
+
                 <button
                   onClick={this.handleGoHome}
                   className="flex-1 inline-flex items-center justify-center px-6 py-3 border border-gray-300 text-base font-semibold rounded-xl text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-all duration-200 shadow-sm hover:shadow-md"
@@ -168,7 +174,8 @@ export default class ErrorBoundary extends Component<Props, State> {
               {/* Help Text */}
               <div className="mt-6 text-center">
                 <p className="text-sm text-gray-500">
-                  If this problem persists, please contact support with the Error ID above.
+                  If this problem persists, please contact support with the
+                  Error ID above.
                 </p>
               </div>
             </div>
@@ -192,8 +199,10 @@ export function withErrorBoundary<P extends object>(
     </ErrorBoundary>
   );
 
-  WrappedComponent.displayName = `withErrorBoundary(${Component.displayName || Component.name})`;
-  
+  WrappedComponent.displayName = `withErrorBoundary(${
+    Component.displayName || Component.name
+  })`;
+
   return WrappedComponent;
 }
 
@@ -201,7 +210,7 @@ export function withErrorBoundary<P extends object>(
 export function useErrorHandler() {
   return (error: Error, errorInfo?: ErrorInfo) => {
     console.error("Error caught by useErrorHandler:", error, errorInfo);
-    
+
     // In a real app, you might want to show a toast or send to error service
     // showError("An error occurred", error.message);
   };

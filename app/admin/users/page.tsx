@@ -14,6 +14,21 @@ import {
   UserCheck,
   UserX,
 } from "lucide-react";
+import { useAppDispatch } from "../store/hooks";
+import { showError, showSuccess } from "../store/slices/toastSlice";
+import { apiClient } from "@/lib/api-client";
+import LoadingSpinner from "../components/LoadingSpinner";
+import SkeletonLoader from "../components/SkeletonLoader";
+import DataTable from "../components/DataTable";
+import Tooltip from "../components/Tooltip";
+import PageHeader from "../components/PageHeader";
+import ActionButton from "../components/ActionButton";
+import SearchBar from "../components/SearchBar";
+import Modal from "../components/Modal";
+import FormField from "../components/FormField";
+import Badge from "../components/Badge";
+import Card from "../components/Card";
+import LoadingButton from "../components/LoadingButton";
 
 interface User {
   id: string;
@@ -39,6 +54,7 @@ interface UserStats {
 }
 
 export default function UsersPage() {
+  const dispatch = useAppDispatch();
   const [users, setUsers] = useState<User[]>([]);
   const [stats, setStats] = useState<UserStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -58,6 +74,7 @@ export default function UsersPage() {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
 
   useEffect(() => {
     fetchUsers();
@@ -66,27 +83,32 @@ export default function UsersPage() {
   const fetchUsers = async () => {
     try {
       setLoading(true);
-      const params = new URLSearchParams({
+      setError("");
+
+      const params = {
         page: pagination.page.toString(),
         limit: pagination.limit.toString(),
         ...(searchTerm && { search: searchTerm }),
         ...(filters.isActive && { isActive: filters.isActive }),
         ...(filters.isVerified && { isVerified: filters.isVerified }),
         ...(filters.role && { role: filters.role }),
-      });
+      };
 
-      const response = await fetch(`/api/admin/users?${params}`);
-      const data = await response.json();
+      const data = await apiClient.get<{
+        data: {
+          users: User[];
+          statistics: UserStats;
+          pagination: typeof pagination;
+        };
+      }>("/api/admin/users", params);
 
-      if (response.ok) {
-        setUsers(data.data.users);
-        setStats(data.data.statistics);
-        setPagination(data.data.pagination);
-      } else {
-        setError(data.message || "Failed to fetch users");
-      }
-    } catch (error) {
-      setError("Network error. Please try again.");
+      setUsers(data.data.users);
+      setStats(data.data.statistics);
+      setPagination(data.data.pagination);
+    } catch (error: any) {
+      const errorMessage = error.message || "Failed to fetch users";
+      setError(errorMessage);
+      dispatch(showError("Failed to load users", errorMessage));
     } finally {
       setLoading(false);
     }
@@ -117,28 +139,28 @@ export default function UsersPage() {
     if (!selectedUser) return;
 
     try {
-      const response = await fetch("/api/admin/users", {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          userId: selectedUser.id,
-          ...updatedData,
-        }),
+      setActionLoading(true);
+
+      await apiClient.patch("/api/admin/users", {
+        userId: selectedUser.id,
+        ...updatedData,
       });
 
-      const data = await response.json();
-
-      if (response.ok) {
-        setShowEditModal(false);
-        setSelectedUser(null);
-        fetchUsers();
-      } else {
-        setError(data.message || "Failed to update user");
-      }
-    } catch (error) {
-      setError("Network error. Please try again.");
+      setShowEditModal(false);
+      setSelectedUser(null);
+      dispatch(
+        showSuccess(
+          "User updated successfully",
+          "User information has been updated"
+        )
+      );
+      fetchUsers();
+    } catch (error: any) {
+      const errorMessage = error.message || "Failed to update user";
+      setError(errorMessage);
+      dispatch(showError("Failed to update user", errorMessage));
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -146,24 +168,25 @@ export default function UsersPage() {
     if (!selectedUser) return;
 
     try {
-      const response = await fetch(
-        `/api/admin/users?userId=${selectedUser.id}`,
-        {
-          method: "DELETE",
-        }
+      setActionLoading(true);
+
+      await apiClient.delete("/api/admin/users", { userId: selectedUser.id });
+
+      setShowDeleteModal(false);
+      setSelectedUser(null);
+      dispatch(
+        showSuccess(
+          "User deactivated successfully",
+          "User has been deactivated"
+        )
       );
-
-      const data = await response.json();
-
-      if (response.ok) {
-        setShowDeleteModal(false);
-        setSelectedUser(null);
-        fetchUsers();
-      } else {
-        setError(data.message || "Failed to delete user");
-      }
-    } catch (error) {
-      setError("Network error. Please try again.");
+      fetchUsers();
+    } catch (error: any) {
+      const errorMessage = error.message || "Failed to deactivate user";
+      setError(errorMessage);
+      dispatch(showError("Failed to deactivate user", errorMessage));
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -175,43 +198,40 @@ export default function UsersPage() {
     });
   };
 
-  const getRoleColor = (role: string) => {
+  const getRoleVariant = (
+    role: string
+  ): "default" | "success" | "warning" | "danger" | "info" => {
     switch (role.toLowerCase()) {
       case "admin":
-        return "bg-red-100 text-red-800";
+        return "danger";
       case "customer":
-        return "bg-blue-100 text-blue-800";
+        return "info";
       default:
-        return "bg-gray-100 text-gray-800";
+        return "default";
     }
   };
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h1
-            className="text-2xl font-bold text-gray-900"
-            style={{ fontFamily: "Red Hat Display, sans-serif" }}
-          >
-            User Management
-          </h1>
-          <p className="mt-1 text-sm text-gray-600">
-            Manage user accounts, roles, and permissions
-          </p>
-        </div>
-        <button className="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 transition-colors flex items-center">
-          <Plus className="h-4 w-4 mr-2" />
-          Add User
-        </button>
-      </div>
+      <PageHeader
+        title="User Management"
+        description="Manage user accounts, roles, and permissions"
+        tooltip="View, edit, and manage all user accounts in the system"
+        actions={
+          <ActionButton
+            icon={Plus}
+            label="Add User"
+            onClick={() => {}}
+            variant="primary"
+          />
+        }
+      />
 
       {/* Stats */}
       {stats && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-white p-6 rounded-lg shadow">
-            <h3 className="text-sm font-medium text-gray-500 mb-2">By Role</h3>
+          <Card title="By Role" description="User distribution by role">
             <div className="space-y-2">
               {stats.byRole.map((stat) => (
                 <div key={stat.role} className="flex justify-between">
@@ -224,11 +244,8 @@ export default function UsersPage() {
                 </div>
               ))}
             </div>
-          </div>
-          <div className="bg-white p-6 rounded-lg shadow">
-            <h3 className="text-sm font-medium text-gray-500 mb-2">
-              By Verification
-            </h3>
+          </Card>
+          <Card title="By Verification" description="User verification status">
             <div className="space-y-2">
               {stats.byVerification.map((stat) => (
                 <div
@@ -244,20 +261,20 @@ export default function UsersPage() {
                 </div>
               ))}
             </div>
-          </div>
-          <div className="bg-white p-6 rounded-lg shadow">
-            <h3 className="text-sm font-medium text-gray-500 mb-2">
-              Total Users
-            </h3>
+          </Card>
+          <Card title="Total Users" description="Overall user count">
             <div className="text-2xl font-bold text-gray-900">
               {pagination.total}
             </div>
-          </div>
+          </Card>
         </div>
       )}
 
       {/* Search and Filters */}
-      <div className="bg-white p-6 rounded-lg shadow">
+      <Card
+        title="Search & Filters"
+        description="Filter users by various criteria"
+      >
         <form
           onSubmit={handleSearch}
           className="flex flex-col md:flex-row gap-4"
@@ -310,130 +327,109 @@ export default function UsersPage() {
             </button>
           </div>
         </form>
-      </div>
+      </Card>
 
       {/* Users Table */}
-      <div className="bg-white shadow rounded-lg overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  User
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Role
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Status
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Bookings
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Last Login
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {loading ? (
-                <tr>
-                  <td colSpan={6} className="px-6 py-4 text-center">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500 mx-auto"></div>
-                  </td>
-                </tr>
-              ) : users.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={6}
-                    className="px-6 py-4 text-center text-gray-500"
-                  >
-                    No users found
-                  </td>
-                </tr>
-              ) : (
-                users.map((user) => (
-                  <tr key={user.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <div className="flex-shrink-0 h-10 w-10">
-                          <div className="h-10 w-10 rounded-full bg-orange-100 flex items-center justify-center">
-                            <span className="text-sm font-medium text-orange-600">
-                              {user.firstName?.charAt(0)}
-                              {user.lastName?.charAt(0)}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="ml-4">
-                          <div className="text-sm font-medium text-gray-900">
-                            {user.name}
-                          </div>
-                          <div className="text-sm text-gray-500">
-                            {user.email}
-                          </div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span
-                        className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getRoleColor(
-                          user.role
-                        )}`}
-                      >
-                        {user.role}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center space-x-2">
-                        {user.isActive ? (
-                          <CheckCircle className="h-4 w-4 text-green-500" />
-                        ) : (
-                          <XCircle className="h-4 w-4 text-red-500" />
-                        )}
-                        {user.isVerified ? (
-                          <UserCheck className="h-4 w-4 text-blue-500" />
-                        ) : (
-                          <UserX className="h-4 w-4 text-gray-400" />
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {user.stats.totalBookings}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {user.lastLoginAt
-                        ? formatDate(user.lastLoginAt)
-                        : "Never"}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <div className="flex items-center space-x-2">
-                        <button
-                          onClick={() => handleEditUser(user)}
-                          className="text-orange-600 hover:text-orange-900"
-                        >
-                          <Edit className="h-4 w-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteUser(user)}
-                          className="text-red-600 hover:text-red-900"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+      <DataTable
+        columns={[
+          {
+            key: "user",
+            label: "User",
+            render: (_, user) => (
+              <div className="flex items-center">
+                <div className="flex-shrink-0 h-10 w-10">
+                  <div className="h-10 w-10 rounded-full bg-orange-100 flex items-center justify-center">
+                    <span className="text-sm font-medium text-orange-600">
+                      {user.firstName?.charAt(0)}
+                      {user.lastName?.charAt(0)}
+                    </span>
+                  </div>
+                </div>
+                <div className="ml-4">
+                  <div className="text-sm font-medium text-gray-900">
+                    {user.name}
+                  </div>
+                  <div className="text-sm text-gray-500">{user.email}</div>
+                </div>
+              </div>
+            ),
+          },
+          {
+            key: "role",
+            label: "Role",
+            render: (_, user) => (
+              <Badge variant={getRoleVariant(user.role)}>{user.role}</Badge>
+            ),
+            mobileHidden: true,
+          },
+          {
+            key: "status",
+            label: "Status",
+            render: (_, user) => (
+              <div className="flex items-center space-x-2">
+                {user.isActive ? (
+                  <CheckCircle className="h-4 w-4 text-green-500" />
+                ) : (
+                  <XCircle className="h-4 w-4 text-red-500" />
+                )}
+                {user.isVerified ? (
+                  <UserCheck className="h-4 w-4 text-blue-500" />
+                ) : (
+                  <UserX className="h-4 w-4 text-gray-400" />
+                )}
+              </div>
+            ),
+          },
+          {
+            key: "bookings",
+            label: "Bookings",
+            render: (_, user) => (
+              <div className="text-sm text-gray-900">
+                {user.stats.totalBookings}
+              </div>
+            ),
+            mobileHidden: true,
+          },
+          {
+            key: "lastLogin",
+            label: "Last Login",
+            render: (_, user) => (
+              <div className="text-sm text-gray-500">
+                {user.lastLoginAt ? formatDate(user.lastLoginAt) : "Never"}
+              </div>
+            ),
+            mobileHidden: true,
+          },
+        ]}
+        data={users}
+        loading={loading}
+        emptyMessage="No users found"
+        actions={(user) => (
+          <div className="flex items-center space-x-2">
+            <ActionButton
+              icon={Edit}
+              label=""
+              onClick={() => handleEditUser(user)}
+              variant="secondary"
+              size="sm"
+              tooltip="Edit user"
+            />
+            <ActionButton
+              icon={Trash2}
+              label=""
+              onClick={() => handleDeleteUser(user)}
+              variant="danger"
+              size="sm"
+              tooltip="Delete user"
+            />
+          </div>
+        )}
+      />
 
-        {/* Pagination */}
-        {pagination.pages > 1 && (
-          <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
+      {/* Pagination */}
+      {pagination.pages > 1 && (
+        <Card className="mt-6">
+          <div className="flex items-center justify-between">
             <div className="flex-1 flex justify-between sm:hidden">
               <button
                 onClick={() =>
@@ -502,8 +498,8 @@ export default function UsersPage() {
               </div>
             </div>
           </div>
-        )}
-      </div>
+        </Card>
+      )}
 
       {/* Edit Modal */}
       {showEditModal && selectedUser && (
@@ -545,14 +541,20 @@ function EditUserModal({
     isVerified: user.isVerified,
     role: user.role,
   });
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onSave(formData);
+    setIsSubmitting(true);
+    try {
+      await onSave(formData);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
-    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+    <div className="fixed inset-0 bg-gray-600/50 backdrop-blur-sm overflow-y-auto h-full w-full z-50">
       <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
         <div className="mt-3">
           <h3 className="text-lg font-medium text-gray-900 mb-4">Edit User</h3>
@@ -667,9 +669,17 @@ function EditUserModal({
               </button>
               <button
                 type="submit"
-                className="px-4 py-2 text-sm font-medium text-white bg-orange-600 rounded-md hover:bg-orange-700"
+                disabled={isSubmitting}
+                className="px-4 py-2 text-sm font-medium text-white bg-orange-600 rounded-md hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
               >
-                Save Changes
+                {isSubmitting ? (
+                  <>
+                    <LoadingSpinner size="sm" className="mr-2" />
+                    Saving...
+                  </>
+                ) : (
+                  "Save Changes"
+                )}
               </button>
             </div>
           </form>
@@ -690,7 +700,7 @@ function DeleteUserModal({
   onConfirm: () => void;
 }) {
   return (
-    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+    <div className="fixed inset-0 bg-gray-600/50 backdrop-blur-sm overflow-y-auto h-full w-full z-50">
       <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
         <div className="mt-3">
           <h3 className="text-lg font-medium text-gray-900 mb-4">

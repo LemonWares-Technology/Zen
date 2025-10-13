@@ -26,7 +26,8 @@ const toastSlice = createSlice({
   initialState,
   reducers: {
     addToast: (state, action: PayloadAction<Omit<Toast, "id">>) => {
-      const id = `toast_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      // Use a counter-based ID to avoid hydration issues
+      const id = `toast_${state.toasts.length + 1}_${Math.floor(Math.random() * 1000)}`;
       const toast: Toast = {
         id,
         duration: 5000,

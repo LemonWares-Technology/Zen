@@ -37,7 +37,7 @@ export default function Sidebar() {
       {/* Mobile overlay */}
       {isOpen && (
         <div
-          className="fixed inset-0 z-40 bg-gray-600 bg-opacity-75 lg:hidden"
+          className="fixed inset-0 z-40 bg-gray-600/75 backdrop-blur-sm lg:hidden"
           onClick={() => dispatch(toggleSidebar())}
         />
       )}
@@ -45,19 +45,17 @@ export default function Sidebar() {
       {/* Sidebar */}
       <div
         className={`
-        fixed inset-y-0 left-0 z-50 flex flex-col bg-white border-r border-gray-200 transition-all duration-300 ease-in-out
+        fixed inset-y-0 left-0 z-50 flex flex-col bg-white border-r border-gray-200 shadow-lg transition-all duration-300 ease-in-out
         ${isOpen ? "translate-x-0" : "-translate-x-full"}
         lg:translate-x-0
+        w-64
         ${isCollapsed ? "lg:w-16" : "lg:w-64"}
       `}
       >
         {/* Sidebar header */}
         <div className="flex items-center justify-between h-16 px-4 border-b border-gray-200">
           {!isCollapsed && (
-            <h1
-              className="text-xl font-bold text-gray-900"
-              style={{ fontFamily: "Red Hat Display, sans-serif" }}
-            >
+            <h1 className="text-xl font-bold text-gray-900 font-sans">
               Zen Admin
             </h1>
           )}

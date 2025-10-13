@@ -4,15 +4,18 @@ import { prisma } from "@/lib/prisma";
 
 const JWT_SECRET = process.env.JWT_SECRET!;
 
-export async function POST(request: NextRequest) {
+export async function GET(request: NextRequest) {
   try {
-    const { token } = await request.json();
+    const authHeader = request.headers.get("authorization");
 
-    if (!token) {
-      return NextResponse.json({
-        message: `Missing required parameter: [ Token ]`,
-      });
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return NextResponse.json(
+        { message: "Missing or invalid authorization header" },
+        { status: 401 }
+      );
     }
+
+    const token = authHeader.substring(7);
 
     const decoded = jwt.verify(token, JWT_SECRET) as any;
 
@@ -41,7 +44,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    return NextResponse.json({ message: `Success`, admin }, { status: 200 });
+    return NextResponse.json(
+      {
+        message: "Token verified successfully",
+        user: admin,
+      },
+      { status: 200 }
+    );
   } catch (error: any) {
     console.error(`Error occured during email verification: ${error}`);
 

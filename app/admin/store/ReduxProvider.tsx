@@ -1,6 +1,6 @@
 "use client";
 
-import { ReactNode } from "react";
+import { ReactNode, useState, useEffect } from "react";
 import { Provider } from "react-redux";
 import { PersistGate } from "redux-persist/integration/react";
 import { store, persistor } from "./store";
@@ -10,6 +10,21 @@ interface ReduxProviderProps {
 }
 
 export default function ReduxProvider({ children }: ReduxProviderProps) {
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  // Don't render PersistGate on server-side to avoid hydration issues
+  if (!isClient) {
+    return (
+      <Provider store={store}>
+        <LoadingScreen />
+      </Provider>
+    );
+  }
+
   return (
     <Provider store={store}>
       <PersistGate loading={<LoadingScreen />} persistor={persistor}>
