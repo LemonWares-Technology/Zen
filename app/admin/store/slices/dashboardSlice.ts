@@ -1,4 +1,5 @@
 import { createSlice, PayloadAction, createAsyncThunk } from "@reduxjs/toolkit";
+import { apiClient } from "@/lib/api-client";
 
 interface DashboardStats {
   totalBookings: number;
@@ -55,13 +56,7 @@ export const fetchDashboardData = createAsyncThunk(
   "dashboard/fetchDashboardData",
   async (_, { rejectWithValue }) => {
     try {
-      const response = await fetch("/api/admin/dashboard");
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      const data = await response.json();
+      const data = await apiClient.get<{ data: any }>("/api/admin/dashboard");
 
       if (!data || !data.data) {
         throw new Error("Invalid response format from server");
@@ -79,14 +74,10 @@ export const fetchAnalytics = createAsyncThunk(
   "dashboard/fetchAnalytics",
   async (params: { type: string; period?: string }, { rejectWithValue }) => {
     try {
-      const searchParams = new URLSearchParams(params);
-      const response = await fetch(`/api/admin/analytics?${searchParams}`);
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || "Failed to fetch analytics");
-      }
-
+      const data = await apiClient.get<{ data: any }>(
+        "/api/admin/analytics",
+        params
+      );
       return data.data;
     } catch (error: any) {
       return rejectWithValue(error.message);

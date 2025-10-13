@@ -17,6 +17,7 @@ The admin dashboard uses Redux Toolkit with Redux Persist for state management, 
 ```text
 store/
 ├── store.ts              # Main store configuration
+├── storage.ts            # SSR-safe storage utility
 ├── index.ts              # Export file for all store-related items
 ├── hooks.ts              # Typed Redux hooks
 ├── ReduxProvider.tsx     # Redux provider with persistence
@@ -26,6 +27,23 @@ store/
     ├── authSlice.ts      # Authentication state management
     └── dashboardSlice.ts # Dashboard data management
 ```
+
+## SSR Compatibility
+
+The Redux store is configured to work seamlessly with Next.js server-side rendering:
+
+### Storage Configuration (`storage.ts`)
+
+- **SSR-Safe**: Automatically detects server vs client environment
+- **Fallback Storage**: Uses noop storage on server-side to prevent errors
+- **Error Handling**: Gracefully handles storage creation failures
+- **Type Safety**: Full TypeScript support with proper typing
+
+### Provider Configuration (`ReduxProvider.tsx`)
+
+- **Hydration Safe**: Prevents hydration mismatches between server and client
+- **Loading States**: Shows loading screen during client-side initialization
+- **PersistGate**: Only renders on client-side to avoid SSR issues
 
 ## State Slices
 

@@ -1,6 +1,5 @@
 import { configureStore } from "@reduxjs/toolkit";
 import { persistStore, persistReducer } from "redux-persist";
-import storage from "redux-persist/lib/storage";
 import { combineReducers } from "@reduxjs/toolkit";
 
 // Import slices
@@ -8,6 +7,9 @@ import sidebarSlice from "./slices/sidebarSlice";
 import authSlice from "./slices/authSlice";
 import dashboardSlice from "./slices/dashboardSlice";
 import toastSlice from "./slices/toastSlice";
+
+// Import storage utility
+import storage from "./storage";
 
 // Persist configuration
 const persistConfig = {

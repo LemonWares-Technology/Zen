@@ -1,8 +1,16 @@
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
+import { verifyAdminToken, createAuthErrorResponse } from "@/lib/admin-auth";
 
 export async function GET(request: NextRequest) {
   try {
+    // Verify admin authentication
+    const authResult = await verifyAdminToken(request);
+    if (!authResult.isValid) {
+      return createAuthErrorResponse(
+        authResult.error || "Authentication failed"
+      );
+    }
     const searchParams = request.nextUrl.searchParams;
     const page = parseInt(searchParams.get("page") || "1");
     const limit = parseInt(searchParams.get("limit") || "20");
@@ -131,16 +139,23 @@ export async function GET(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
+    // Verify admin authentication
+    const authResult = await verifyAdminToken(request);
+    if (!authResult.isValid) {
+      return createAuthErrorResponse(
+        authResult.error || "Authentication failed"
+      );
+    }
     const body = await request.json();
-    const { 
-      userId, 
-      email, 
-      firstName, 
-      lastName, 
-      phone, 
-      isActive, 
-      isVerified, 
-      role 
+    const {
+      userId,
+      email,
+      firstName,
+      lastName,
+      phone,
+      isActive,
+      isVerified,
+      role,
     } = body;
 
     if (!userId) {
@@ -156,7 +171,7 @@ export async function PATCH(request: NextRequest) {
     const updateData: any = {
       updatedAt: new Date(),
     };
-    
+
     if (email) updateData.email = email;
     if (firstName) updateData.firstName = firstName;
     if (lastName) updateData.lastName = lastName;
@@ -223,6 +238,13 @@ export async function PATCH(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
+    // Verify admin authentication
+    const authResult = await verifyAdminToken(request);
+    if (!authResult.isValid) {
+      return createAuthErrorResponse(
+        authResult.error || "Authentication failed"
+      );
+    }
     const searchParams = request.nextUrl.searchParams;
     const userId = searchParams.get("userId");
 
@@ -266,4 +288,3 @@ export async function DELETE(request: NextRequest) {
     );
   }
 }
-

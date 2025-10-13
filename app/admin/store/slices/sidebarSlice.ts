@@ -6,7 +6,7 @@ interface SidebarState {
 }
 
 const initialState: SidebarState = {
-  isOpen: false,
+  isOpen: false, // Closed by default, will be set based on screen size
   isCollapsed: false,
 };
 

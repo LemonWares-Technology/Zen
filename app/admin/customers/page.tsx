@@ -15,6 +15,21 @@ import {
   Calendar,
   CreditCard,
 } from "lucide-react";
+import { useAppDispatch } from "../store/hooks";
+import { showError, showSuccess } from "../store/slices/toastSlice";
+import { apiClient } from "@/lib/api-client";
+import LoadingSpinner from "../components/LoadingSpinner";
+import SkeletonLoader from "../components/SkeletonLoader";
+import DataTable from "../components/DataTable";
+import Tooltip from "../components/Tooltip";
+import PageHeader from "../components/PageHeader";
+import ActionButton from "../components/ActionButton";
+import SearchBar from "../components/SearchBar";
+import Modal from "../components/Modal";
+import FormField from "../components/FormField";
+import Badge from "../components/Badge";
+import Card from "../components/Card";
+import LoadingButton from "../components/LoadingButton";
 
 interface Customer {
   id: string;
@@ -39,6 +54,7 @@ interface CustomerStats {
 }
 
 export default function CustomersPage() {
+  const dispatch = useAppDispatch();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [stats, setStats] = useState<CustomerStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -61,6 +77,7 @@ export default function CustomersPage() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
 
   useEffect(() => {
     fetchCustomers();
@@ -69,27 +86,32 @@ export default function CustomersPage() {
   const fetchCustomers = async () => {
     try {
       setLoading(true);
-      const params = new URLSearchParams({
+      setError("");
+
+      const params = {
         page: pagination.page.toString(),
         limit: pagination.limit.toString(),
         ...(searchTerm && { search: searchTerm }),
         ...(filters.isActive && { isActive: filters.isActive }),
         ...(filters.isVerified && { isVerified: filters.isVerified }),
         ...(filters.hasBookings && { hasBookings: filters.hasBookings }),
-      });
+      };
 
-      const response = await fetch(`/api/admin/customers?${params}`);
-      const data = await response.json();
+      const data = await apiClient.get<{
+        data: {
+          customers: Customer[];
+          statistics: CustomerStats;
+          pagination: typeof pagination;
+        };
+      }>("/api/admin/customers", params);
 
-      if (response.ok) {
-        setCustomers(data.data.customers);
-        setStats(data.data.statistics);
-        setPagination(data.data.pagination);
-      } else {
-        setError(data.message || "Failed to fetch customers");
-      }
-    } catch (error) {
-      setError("Network error. Please try again.");
+      setCustomers(data.data.customers);
+      setStats(data.data.statistics);
+      setPagination(data.data.pagination);
+    } catch (error: any) {
+      const errorMessage = error.message || "Failed to fetch customers";
+      setError(errorMessage);
+      dispatch(showError("Failed to load customers", errorMessage));
     } finally {
       setLoading(false);
     }
@@ -120,28 +142,28 @@ export default function CustomersPage() {
     if (!selectedCustomer) return;
 
     try {
-      const response = await fetch("/api/admin/customers", {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          customerId: selectedCustomer.id,
-          ...updatedData,
-        }),
+      setActionLoading(true);
+
+      await apiClient.patch("/api/admin/customers", {
+        customerId: selectedCustomer.id,
+        ...updatedData,
       });
 
-      const data = await response.json();
-
-      if (response.ok) {
-        setShowEditModal(false);
-        setSelectedCustomer(null);
-        fetchCustomers();
-      } else {
-        setError(data.message || "Failed to update customer");
-      }
-    } catch (error) {
-      setError("Network error. Please try again.");
+      setShowEditModal(false);
+      setSelectedCustomer(null);
+      dispatch(
+        showSuccess(
+          "Customer updated successfully",
+          "Customer information has been updated"
+        )
+      );
+      fetchCustomers();
+    } catch (error: any) {
+      const errorMessage = error.message || "Failed to update customer";
+      setError(errorMessage);
+      dispatch(showError("Failed to update customer", errorMessage));
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -149,47 +171,50 @@ export default function CustomersPage() {
     if (!selectedCustomer) return;
 
     try {
-      const response = await fetch(
-        `/api/admin/customers?customerId=${selectedCustomer.id}`,
-        {
-          method: "DELETE",
-        }
+      setActionLoading(true);
+
+      await apiClient.delete("/api/admin/customers", {
+        customerId: selectedCustomer.id,
+      });
+
+      setShowDeleteModal(false);
+      setSelectedCustomer(null);
+      dispatch(
+        showSuccess(
+          "Customer deactivated successfully",
+          "Customer has been deactivated"
+        )
       );
-
-      const data = await response.json();
-
-      if (response.ok) {
-        setShowDeleteModal(false);
-        setSelectedCustomer(null);
-        fetchCustomers();
-      } else {
-        setError(data.message || "Failed to delete customer");
-      }
-    } catch (error) {
-      setError("Network error. Please try again.");
+      fetchCustomers();
+    } catch (error: any) {
+      const errorMessage = error.message || "Failed to deactivate customer";
+      setError(errorMessage);
+      dispatch(showError("Failed to deactivate customer", errorMessage));
+    } finally {
+      setActionLoading(false);
     }
   };
 
   const handleCreateCustomer = async (customerData: Partial<Customer>) => {
     try {
-      const response = await fetch("/api/admin/customers", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(customerData),
-      });
+      setActionLoading(true);
 
-      const data = await response.json();
+      await apiClient.post("/api/admin/customers", customerData);
 
-      if (response.ok) {
-        setShowCreateModal(false);
-        fetchCustomers();
-      } else {
-        setError(data.message || "Failed to create customer");
-      }
-    } catch (error) {
-      setError("Network error. Please try again.");
+      setShowCreateModal(false);
+      dispatch(
+        showSuccess(
+          "Customer created successfully",
+          "New customer has been added"
+        )
+      );
+      fetchCustomers();
+    } catch (error: any) {
+      const errorMessage = error.message || "Failed to create customer";
+      setError(errorMessage);
+      dispatch(showError("Failed to create customer", errorMessage));
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -202,43 +227,36 @@ export default function CustomersPage() {
   };
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("en-US", {
+    return new Intl.NumberFormat("en-NG", {
       style: "currency",
-      currency: "USD",
+      currency: "NGN",
     }).format(amount);
   };
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h1
-            className="text-2xl font-bold text-gray-900"
-            style={{ fontFamily: "Red Hat Display, sans-serif" }}
-          >
-            Customer Management
-          </h1>
-          <p className="mt-1 text-sm text-gray-600">
-            Manage customer accounts and track their activity
-          </p>
-        </div>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 transition-colors flex items-center"
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          Add Customer
-        </button>
-      </div>
+      <PageHeader
+        title="Customer Management"
+        description="Manage customer accounts and track their activity"
+        tooltip="View, edit, and manage all customer accounts in the system"
+        actions={
+          <ActionButton
+            icon={Plus}
+            label="Add Customer"
+            onClick={() => setShowCreateModal(true)}
+            variant="primary"
+          />
+        }
+      />
 
       {/* Stats */}
       {stats && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-white p-6 rounded-lg shadow">
-            <h3 className="text-sm font-medium text-gray-500 mb-4">
-              By Verification Status
-            </h3>
+          <Card
+            title="By Verification Status"
+            description="Customer verification distribution"
+          >
             <div className="space-y-3">
               {stats.byVerification.map((stat) => (
                 <div
@@ -261,11 +279,11 @@ export default function CustomersPage() {
                 </div>
               ))}
             </div>
-          </div>
-          <div className="bg-white p-6 rounded-lg shadow">
-            <h3 className="text-sm font-medium text-gray-500 mb-4">
-              By Active Status
-            </h3>
+          </Card>
+          <Card
+            title="By Active Status"
+            description="Customer activity distribution"
+          >
             <div className="space-y-3">
               {stats.byActive.map((stat) => (
                 <div
@@ -288,11 +306,8 @@ export default function CustomersPage() {
                 </div>
               ))}
             </div>
-          </div>
-          <div className="bg-white p-6 rounded-lg shadow">
-            <h3 className="text-sm font-medium text-gray-500 mb-2">
-              Total Customers
-            </h3>
+          </Card>
+          <Card title="Total Customers" description="Overall customer count">
             <div className="text-2xl font-bold text-gray-900">
               {pagination.total}
             </div>
@@ -300,12 +315,15 @@ export default function CustomersPage() {
               {customers.filter((c) => c.stats.totalBookings > 0).length} with
               bookings
             </div>
-          </div>
+          </Card>
         </div>
       )}
 
       {/* Search and Filters */}
-      <div className="bg-white p-6 rounded-lg shadow">
+      <Card
+        title="Search & Filters"
+        description="Filter customers by various criteria"
+      >
         <form
           onSubmit={handleSearch}
           className="flex flex-col md:flex-row gap-4"
@@ -360,147 +378,134 @@ export default function CustomersPage() {
             </button>
           </div>
         </form>
-      </div>
+      </Card>
 
       {/* Customers Table */}
-      <div className="bg-white shadow rounded-lg overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Customer
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Status
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Bookings
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Payments
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Last Login
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Joined
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {loading ? (
-                <tr>
-                  <td colSpan={7} className="px-6 py-4 text-center">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500 mx-auto"></div>
-                  </td>
-                </tr>
-              ) : customers.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={7}
-                    className="px-6 py-4 text-center text-gray-500"
-                  >
-                    No customers found
-                  </td>
-                </tr>
-              ) : (
-                customers.map((customer) => (
-                  <tr key={customer.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <div className="flex-shrink-0 h-10 w-10">
-                          <div className="h-10 w-10 rounded-full bg-orange-100 flex items-center justify-center">
-                            <span className="text-sm font-medium text-orange-600">
-                              {customer.firstName?.charAt(0)}
-                              {customer.lastName?.charAt(0)}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="ml-4">
-                          <div className="text-sm font-medium text-gray-900">
-                            {customer.name}
-                          </div>
-                          <div className="text-sm text-gray-500">
-                            {customer.email}
-                          </div>
-                          {customer.phone && (
-                            <div className="text-sm text-gray-500">
-                              {customer.phone}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center space-x-2">
-                        {customer.isActive ? (
-                          <CheckCircle className="h-4 w-4 text-green-500" />
-                        ) : (
-                          <XCircle className="h-4 w-4 text-red-500" />
-                        )}
-                        {customer.isVerified ? (
-                          <UserCheck className="h-4 w-4 text-blue-500" />
-                        ) : (
-                          <UserX className="h-4 w-4 text-gray-400" />
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <Calendar className="h-4 w-4 text-gray-400 mr-2" />
-                        <span className="text-sm text-gray-900">
-                          {customer.stats.totalBookings}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <CreditCard className="h-4 w-4 text-gray-400 mr-2" />
-                        <span className="text-sm text-gray-900">
-                          {customer.stats.totalPayments}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {customer.lastLoginAt
-                        ? formatDate(customer.lastLoginAt)
-                        : "Never"}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {formatDate(customer.createdAt)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <div className="flex items-center space-x-2">
-                        <button
-                          onClick={() => handleEditCustomer(customer)}
-                          className="text-orange-600 hover:text-orange-900"
-                          title="Edit customer"
-                        >
-                          <Edit className="h-4 w-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteCustomer(customer)}
-                          className="text-red-600 hover:text-red-900"
-                          title="Delete customer"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+      <DataTable
+        columns={[
+          {
+            key: "customer",
+            label: "Customer",
+            render: (_, customer) => (
+              <div className="flex items-center">
+                <div className="flex-shrink-0 h-10 w-10">
+                  <div className="h-10 w-10 rounded-full bg-orange-100 flex items-center justify-center">
+                    <span className="text-sm font-medium text-orange-600">
+                      {customer.firstName?.charAt(0)}
+                      {customer.lastName?.charAt(0)}
+                    </span>
+                  </div>
+                </div>
+                <div className="ml-4">
+                  <div className="text-sm font-medium text-gray-900">
+                    {customer.name}
+                  </div>
+                  <div className="text-sm text-gray-500">{customer.email}</div>
+                  {customer.phone && (
+                    <div className="text-sm text-gray-500">
+                      {customer.phone}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ),
+          },
+          {
+            key: "status",
+            label: "Status",
+            render: (_, customer) => (
+              <div className="flex items-center space-x-2">
+                {customer.isActive ? (
+                  <CheckCircle className="h-4 w-4 text-green-500" />
+                ) : (
+                  <XCircle className="h-4 w-4 text-red-500" />
+                )}
+                {customer.isVerified ? (
+                  <UserCheck className="h-4 w-4 text-blue-500" />
+                ) : (
+                  <UserX className="h-4 w-4 text-gray-400" />
+                )}
+              </div>
+            ),
+          },
+          {
+            key: "bookings",
+            label: "Bookings",
+            render: (_, customer) => (
+              <div className="flex items-center">
+                <Calendar className="h-4 w-4 text-gray-400 mr-2" />
+                <span className="text-sm text-gray-900">
+                  {customer.stats.totalBookings}
+                </span>
+              </div>
+            ),
+            mobileHidden: true,
+          },
+          {
+            key: "payments",
+            label: "Payments",
+            render: (_, customer) => (
+              <div className="flex items-center">
+                <CreditCard className="h-4 w-4 text-gray-400 mr-2" />
+                <span className="text-sm text-gray-900">
+                  {customer.stats.totalPayments}
+                </span>
+              </div>
+            ),
+            mobileHidden: true,
+          },
+          {
+            key: "lastLogin",
+            label: "Last Login",
+            render: (_, customer) => (
+              <div className="text-sm text-gray-500">
+                {customer.lastLoginAt
+                  ? formatDate(customer.lastLoginAt)
+                  : "Never"}
+              </div>
+            ),
+            mobileHidden: true,
+          },
+          {
+            key: "joined",
+            label: "Joined",
+            render: (_, customer) => (
+              <div className="text-sm text-gray-500">
+                {formatDate(customer.createdAt)}
+              </div>
+            ),
+            mobileHidden: true,
+          },
+        ]}
+        data={customers}
+        loading={loading}
+        emptyMessage="No customers found"
+        actions={(customer) => (
+          <div className="flex items-center space-x-2">
+            <ActionButton
+              icon={Edit}
+              label=""
+              onClick={() => handleEditCustomer(customer)}
+              variant="secondary"
+              size="sm"
+              tooltip="Edit customer"
+            />
+            <ActionButton
+              icon={Trash2}
+              label=""
+              onClick={() => handleDeleteCustomer(customer)}
+              variant="danger"
+              size="sm"
+              tooltip="Delete customer"
+            />
+          </div>
+        )}
+      />
 
-        {/* Pagination */}
-        {pagination.pages > 1 && (
-          <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
+      {/* Pagination */}
+      {pagination.pages > 1 && (
+        <Card className="mt-6">
+          <div className="flex items-center justify-between">
             <div className="flex-1 flex justify-between sm:hidden">
               <button
                 onClick={() =>
@@ -569,8 +574,8 @@ export default function CustomersPage() {
               </div>
             </div>
           </div>
-        )}
-      </div>
+        </Card>
+      )}
 
       {/* Edit Modal */}
       {showEditModal && selectedCustomer && (
@@ -626,7 +631,7 @@ function EditCustomerModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+    <div className="fixed inset-0 bg-gray-600/50 backdrop-blur-sm overflow-y-auto h-full w-full z-50">
       <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
         <div className="mt-3">
           <h3 className="text-lg font-medium text-gray-900 mb-4">
@@ -751,7 +756,7 @@ function DeleteCustomerModal({
   onConfirm: () => void;
 }) {
   return (
-    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+    <div className="fixed inset-0 bg-gray-600/50 backdrop-blur-sm overflow-y-auto h-full w-full z-50">
       <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
         <div className="mt-3">
           <h3 className="text-lg font-medium text-gray-900 mb-4">
@@ -812,7 +817,7 @@ function CreateCustomerModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+    <div className="fixed inset-0 bg-gray-600/50 backdrop-blur-sm overflow-y-auto h-full w-full z-50">
       <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
         <div className="mt-3">
           <h3 className="text-lg font-medium text-gray-900 mb-4">

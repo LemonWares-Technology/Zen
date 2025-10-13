@@ -6,18 +6,22 @@ import { fetchDashboardData } from "./store/slices/dashboardSlice";
 import { showError, showSuccess } from "./store/slices/toastSlice";
 import LoadingSpinner from "./components/LoadingSpinner";
 import SkeletonLoader from "./components/SkeletonLoader";
-import SystemTest from "./components/SystemTest";
+import ClientOnly from "./components/ClientOnly";
 import {
   Users,
   Calendar,
   CreditCard,
   TrendingUp,
-  DollarSign,
+  Banknote,
   Activity,
   ArrowUpRight,
   ArrowDownRight,
   RefreshCw,
 } from "lucide-react";
+import Tooltip from "./components/Tooltip";
+import StatsCard from "./components/StatsCard";
+import PageHeader from "./components/PageHeader";
+import ActionButton from "./components/ActionButton";
 
 export default function AdminDashboard() {
   const dispatch = useAppDispatch();
@@ -34,12 +38,19 @@ export default function AdminDashboard() {
     const loadDashboardData = async () => {
       try {
         await dispatch(fetchDashboardData()).unwrap();
-        showSuccess(
-          "Dashboard loaded successfully",
-          "All data has been refreshed"
+        dispatch(
+          showSuccess(
+            "Dashboard loaded successfully",
+            "All data has been refreshed"
+          )
         );
       } catch (error) {
-        showError("Failed to load dashboard", "Please try refreshing the page");
+        dispatch(
+          showError(
+            "Failed to load dashboard",
+            "Please try refreshing the page"
+          )
+        );
       }
     };
 
@@ -49,25 +60,33 @@ export default function AdminDashboard() {
   const handleRefresh = async () => {
     try {
       await dispatch(fetchDashboardData()).unwrap();
-      showSuccess("Dashboard refreshed", "Data has been updated");
+      dispatch(showSuccess("Dashboard refreshed", "Data has been updated"));
     } catch (error) {
-      showError("Refresh failed", "Please try again");
+      dispatch(showError("Refresh failed", "Please try again"));
     }
   };
 
-  const formatCurrency = (amount: number, currency: string = "USD") => {
-    return new Intl.NumberFormat("en-US", {
+  const formatCurrency = (amount: number, currency: string = "NGN") => {
+    return new Intl.NumberFormat("en-NG", {
       style: "currency",
       currency: currency,
     }).format(amount);
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) {
+        return "Invalid Date";
+      }
+      return date.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      });
+    } catch (error) {
+      return "Invalid Date";
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -140,70 +159,37 @@ export default function AdminDashboard() {
 
   return (
     <div className="space-y-6">
-      {/* System Test - Remove in production */}
-      <SystemTest />
-
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1
-            className="text-3xl font-bold text-gray-900"
-            style={{ fontFamily: "Red Hat Display, sans-serif" }}
-          >
-            Dashboard Overview
-          </h1>
-          <p className="mt-2 text-gray-600">
-            Welcome to the Zen admin dashboard. Here's what's happening with
-            your business.
-          </p>
-        </div>
-        <button
-          onClick={handleRefresh}
-          disabled={isLoading}
-          className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
-        >
-          <RefreshCw
-            className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`}
+      <PageHeader
+        title="Dashboard Overview"
+        description="Welcome to the Zen admin dashboard. Here's what's happening with your business."
+        actions={
+          <ActionButton
+            icon={RefreshCw}
+            label={isLoading ? "Refreshing..." : "Refresh"}
+            onClick={handleRefresh}
+            disabled={isLoading}
+            loading={isLoading}
+            variant="secondary"
           />
-          {isLoading ? "Refreshing..." : "Refresh"}
-        </button>
-      </div>
+        }
+      />
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="bg-white overflow-hidden shadow-sm border border-gray-200 rounded-xl hover:shadow-md transition-shadow duration-200">
-          <div className="p-6">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <div className="flex items-center justify-center w-12 h-12 bg-orange-100 rounded-lg">
-                  <Calendar className="h-6 w-6 text-orange-600" />
-                </div>
-              </div>
-              <div className="ml-5 w-0 flex-1">
-                <dl>
-                  <dt className="text-sm font-medium text-gray-500 truncate">
-                    Total Bookings
-                  </dt>
-                  <dd className="text-2xl font-bold text-gray-900">
-                    {isLoading ? (
-                      <div className="h-8 w-16 bg-gray-200 rounded animate-pulse"></div>
-                    ) : (
-                      stats?.totalBookings.toLocaleString()
-                    )}
-                  </dd>
-                </dl>
-              </div>
-            </div>
-          </div>
-          <div className="bg-gradient-to-r from-green-50 to-emerald-50 px-6 py-3 border-t border-gray-100">
-            <div className="text-sm">
-              <span className="font-medium text-green-700 flex items-center">
-                <ArrowUpRight className="h-4 w-4 mr-1" />
-                12% from last month
-              </span>
-            </div>
-          </div>
-        </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+        <StatsCard
+          title="Total Bookings"
+          value={isLoading ? "" : stats?.totalBookings.toLocaleString() || "0"}
+          icon={Calendar}
+          iconColor="bg-orange-100 text-orange-600"
+          loading={isLoading}
+          tooltip="Total number of bookings made through the platform"
+          trend={{
+            value: 12,
+            label: "from last month",
+            isPositive: true,
+          }}
+        />
 
         <div className="bg-white overflow-hidden shadow-sm border border-gray-200 rounded-xl hover:shadow-md transition-shadow duration-200">
           <div className="p-6">
@@ -215,8 +201,12 @@ export default function AdminDashboard() {
               </div>
               <div className="ml-5 w-0 flex-1">
                 <dl>
-                  <dt className="text-sm font-medium text-gray-500 truncate">
+                  <dt className="text-sm font-medium text-gray-500 truncate flex items-center">
                     Total Users
+                    <Tooltip
+                      content="Total number of registered users on the platform"
+                      iconOnly
+                    />
                   </dt>
                   <dd className="text-2xl font-bold text-gray-900">
                     {isLoading ? (
@@ -244,13 +234,17 @@ export default function AdminDashboard() {
             <div className="flex items-center">
               <div className="flex-shrink-0">
                 <div className="flex items-center justify-center w-12 h-12 bg-green-100 rounded-lg">
-                  <DollarSign className="h-6 w-6 text-green-600" />
+                  <Banknote className="h-6 w-6 text-green-600" />
                 </div>
               </div>
               <div className="ml-5 w-0 flex-1">
                 <dl>
-                  <dt className="text-sm font-medium text-gray-500 truncate">
+                  <dt className="text-sm font-medium text-gray-500 truncate flex items-center">
                     Total Revenue
+                    <Tooltip
+                      content="Total revenue generated from completed bookings"
+                      iconOnly
+                    />
                   </dt>
                   <dd className="text-2xl font-bold text-gray-900">
                     {isLoading ? (
@@ -283,8 +277,12 @@ export default function AdminDashboard() {
               </div>
               <div className="ml-5 w-0 flex-1">
                 <dl>
-                  <dt className="text-sm font-medium text-gray-500 truncate">
+                  <dt className="text-sm font-medium text-gray-500 truncate flex items-center">
                     Avg Booking Value
+                    <Tooltip
+                      content="Average value per booking calculated from total revenue"
+                      iconOnly
+                    />
                   </dt>
                   <dd className="text-2xl font-bold text-gray-900">
                     {isLoading ? (
@@ -309,15 +307,16 @@ export default function AdminDashboard() {
       </div>
 
       {/* Charts and Tables */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
         {/* Recent Bookings */}
         <div className="bg-white shadow-sm border border-gray-200 rounded-xl overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-gray-100">
-            <h3
-              className="text-lg font-semibold text-gray-900"
-              style={{ fontFamily: "Red Hat Display, sans-serif" }}
-            >
+          <div className="px-4 sm:px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-gray-100">
+            <h3 className="text-lg font-semibold text-gray-900 font-sans flex items-center">
               Recent Bookings
+              <Tooltip
+                content="Latest bookings made through the platform"
+                iconOnly
+              />
             </h3>
             <p className="text-sm text-gray-600 mt-1">
               Latest booking activities
@@ -395,10 +394,7 @@ export default function AdminDashboard() {
         {/* Booking Types */}
         <div className="bg-white shadow-sm border border-gray-200 rounded-xl overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-gray-100">
-            <h3
-              className="text-lg font-semibold text-gray-900"
-              style={{ fontFamily: "Red Hat Display, sans-serif" }}
-            >
+            <h3 className="text-lg font-semibold text-gray-900 font-sans">
               Booking Types
             </h3>
             <p className="text-sm text-gray-600 mt-1">
@@ -448,10 +444,7 @@ export default function AdminDashboard() {
       {/* Top Destinations */}
       <div className="bg-white shadow-sm border border-gray-200 rounded-xl overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-gray-100">
-          <h3
-            className="text-lg font-semibold text-gray-900"
-            style={{ fontFamily: "Red Hat Display, sans-serif" }}
-          >
+          <h3 className="text-lg font-semibold text-gray-900 font-sans">
             Top Destinations
           </h3>
           <p className="text-sm text-gray-600 mt-1">

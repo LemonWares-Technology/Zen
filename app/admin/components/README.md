@@ -8,10 +8,14 @@ This directory contains the separated components for the Zen admin dashboard, or
 components/
 ├── index.ts                 # Export file for all components
 ├── SidebarContext.tsx       # Sidebar state management context
-├── AuthContext.tsx          # Authentication state management context
 ├── Sidebar.tsx              # Main sidebar component
 ├── TopNavigation.tsx        # Top navigation bar component
-└── AdminLayout.tsx          # Main layout wrapper component
+├── AdminLayout.tsx          # Main layout wrapper component
+├── LoadingSpinner.tsx       # Loading spinner component
+├── SkeletonLoader.tsx       # Skeleton loading component
+├── ToastContainer.tsx       # Toast notifications container
+├── ErrorBoundary.tsx        # Error boundary component
+└── ClientOnly.tsx           # Client-side only wrapper
 ```
 
 ## Components
@@ -27,16 +31,6 @@ components/
   - `isCollapsed`: Desktop sidebar collapse state
   - `toggleSidebar()`: Toggle mobile sidebar
   - `collapseSidebar()`: Toggle desktop sidebar collapse
-
-#### `AuthContext.tsx`
-
-- **Purpose**: Manages authentication state and operations
-- **Exports**: `AuthProvider`, `useAuth`
-- **State**:
-  - `isAuthenticated`: User authentication status
-  - `isLoading`: Authentication check loading state
-  - `login(token)`: Login with JWT token
-  - `logout()`: Logout and redirect to login
 
 ### UI Components
 
@@ -74,16 +68,14 @@ components/
 ### Basic Setup
 
 ```tsx
-import { AuthProvider, SidebarProvider } from "./components";
+import { SidebarProvider } from "./components";
 import AdminLayout from "./components/AdminLayout";
 
 export default function AdminRootLayout({ children }) {
   return (
-    <AuthProvider>
-      <SidebarProvider>
-        <AdminLayout>{children}</AdminLayout>
-      </SidebarProvider>
-    </AuthProvider>
+    <SidebarProvider>
+      <AdminLayout>{children}</AdminLayout>
+    </SidebarProvider>
   );
 }
 ```
@@ -91,11 +83,10 @@ export default function AdminRootLayout({ children }) {
 ### Using Context Hooks
 
 ```tsx
-import { useSidebar, useAuth } from "./components";
+import { useSidebar } from "./components";
 
 function MyComponent() {
   const { isCollapsed, toggleSidebar } = useSidebar();
-  const { isAuthenticated, logout } = useAuth();
 
   // Component logic
 }

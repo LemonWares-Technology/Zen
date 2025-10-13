@@ -7,10 +7,26 @@ import {
   BarChart3,
   TrendingUp,
   Users,
-  DollarSign,
+  Banknote,
   FileText,
   CreditCard,
 } from "lucide-react";
+import { useAppDispatch } from "../store/hooks";
+import { showError, showSuccess } from "../store/slices/toastSlice";
+import { apiClient } from "@/lib/api-client";
+import LoadingSpinner from "../components/LoadingSpinner";
+import SkeletonLoader from "../components/SkeletonLoader";
+import DataTable from "../components/DataTable";
+import Tooltip from "../components/Tooltip";
+import PageHeader from "../components/PageHeader";
+import ActionButton from "../components/ActionButton";
+import SearchBar from "../components/SearchBar";
+import Modal from "../components/Modal";
+import FormField from "../components/FormField";
+import Badge from "../components/Badge";
+import Card from "../components/Card";
+import LoadingButton from "../components/LoadingButton";
+import StatsCard from "../components/StatsCard";
 
 interface ReportData {
   period: {
@@ -127,6 +143,7 @@ interface UserReportData {
 }
 
 export default function ReportsPage() {
+  const dispatch = useAppDispatch();
   const [reportType, setReportType] = useState<
     "summary" | "financial" | "users"
   >("summary");
@@ -151,23 +168,22 @@ export default function ReportsPage() {
       setLoading(true);
       setError("");
 
-      const params = new URLSearchParams({
+      const params = {
         type: reportType,
         startDate: dateRange.startDate,
         endDate: dateRange.endDate,
         format: "json",
-      });
+      };
 
-      const response = await fetch(`/api/admin/reports?${params}`);
-      const data = await response.json();
+      const data = await apiClient.get<{
+        data: ReportData | FinancialReportData | UserReportData;
+      }>("/api/admin/reports", params);
 
-      if (response.ok) {
-        setReportData(data.data);
-      } else {
-        setError(data.message || "Failed to generate report");
-      }
-    } catch (error) {
-      setError("Network error. Please try again.");
+      setReportData(data.data);
+    } catch (error: any) {
+      const errorMessage = error.message || "Failed to generate report";
+      setError(errorMessage);
+      dispatch(showError("Failed to generate report", errorMessage));
     } finally {
       setLoading(false);
     }
@@ -179,14 +195,17 @@ export default function ReportsPage() {
 
   const downloadReport = async (format: "csv" | "pdf") => {
     try {
-      const params = new URLSearchParams({
+      const params = {
         type: reportType,
         startDate: dateRange.startDate,
         endDate: dateRange.endDate,
         format: format,
-      });
+      };
 
-      const response = await fetch(`/api/admin/reports?${params}`);
+      // For file downloads, we need to use fetch directly
+      const response = await fetch(
+        `/api/admin/reports?${new URLSearchParams(params)}`
+      );
 
       if (response.ok) {
         const blob = await response.blob();
@@ -198,18 +217,24 @@ export default function ReportsPage() {
         a.click();
         window.URL.revokeObjectURL(url);
         document.body.removeChild(a);
+        dispatch(showSuccess("Download started", "Report download has begun"));
       } else {
-        setError("Failed to download report");
+        const errorData = await response.json();
+        const errorMessage = errorData.message || "Failed to download report";
+        setError(errorMessage);
+        dispatch(showError("Download failed", errorMessage));
       }
-    } catch (error) {
-      setError("Network error. Please try again.");
+    } catch (error: any) {
+      const errorMessage = error.message || "Network error. Please try again.";
+      setError(errorMessage);
+      dispatch(showError("Download failed", errorMessage));
     }
   };
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("en-US", {
+    return new Intl.NumberFormat("en-NG", {
       style: "currency",
-      currency: "USD",
+      currency: "NGN",
     }).format(amount);
   };
 
@@ -228,38 +253,35 @@ export default function ReportsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h1
-            className="text-2xl font-bold text-gray-900"
-            style={{ fontFamily: "Red Hat Display, sans-serif" }}
-          >
-            Reports & Analytics
-          </h1>
-          <p className="mt-1 text-sm text-gray-600">
-            Generate comprehensive reports and analytics for your business
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <button
-            onClick={() => downloadReport("csv")}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center"
-          >
-            <Download className="h-4 w-4 mr-2" />
-            Export CSV
-          </button>
-          <button
-            onClick={() => downloadReport("pdf")}
-            className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors flex items-center"
-          >
-            <FileText className="h-4 w-4 mr-2" />
-            Export PDF
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        title="Reports & Analytics"
+        description="Generate comprehensive reports and analytics for your business"
+        tooltip="Generate and export various reports for business insights"
+        actions={
+          <div className="flex flex-col sm:flex-row gap-2">
+            <ActionButton
+              icon={Download}
+              label="Export CSV"
+              onClick={() => downloadReport("csv")}
+              variant="secondary"
+              size="sm"
+            />
+            <ActionButton
+              icon={FileText}
+              label="Export PDF"
+              onClick={() => downloadReport("pdf")}
+              variant="secondary"
+              size="sm"
+            />
+          </div>
+        }
+      />
 
       {/* Report Controls */}
-      <div className="bg-white p-6 rounded-lg shadow">
+      <Card
+        title="Report Controls"
+        description="Configure report type and date range"
+      >
         <div className="flex flex-col md:flex-row gap-4">
           <div className="flex-1">
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -318,7 +340,7 @@ export default function ReportsPage() {
             </button>
           </div>
         </div>
-      </div>
+      </Card>
 
       {/* Error Message */}
       {error && (
@@ -329,10 +351,10 @@ export default function ReportsPage() {
 
       {/* Report Content */}
       {loading ? (
-        <div className="bg-white p-8 rounded-lg shadow text-center">
+        <Card className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mx-auto"></div>
           <p className="mt-4 text-gray-600">Generating report...</p>
-        </div>
+        </Card>
       ) : reportData ? (
         <div className="space-y-6">
           {/* Summary Report */}
@@ -351,12 +373,12 @@ export default function ReportsPage() {
           )}
         </div>
       ) : (
-        <div className="bg-white p-8 rounded-lg shadow text-center">
+        <Card className="text-center">
           <BarChart3 className="h-12 w-12 text-gray-400 mx-auto mb-4" />
           <p className="text-gray-600">
             Select a report type and date range to generate a report
           </p>
-        </div>
+        </Card>
       )}
     </div>
   );
@@ -365,9 +387,9 @@ export default function ReportsPage() {
 // Summary Report Component
 function SummaryReportView({ data }: { data: ReportData }) {
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("en-US", {
+    return new Intl.NumberFormat("en-NG", {
       style: "currency",
-      currency: "USD",
+      currency: "NGN",
     }).format(amount);
   };
 
@@ -386,78 +408,51 @@ function SummaryReportView({ data }: { data: ReportData }) {
   return (
     <>
       {/* Period Info */}
-      <div className="bg-white p-6 rounded-lg shadow">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">
-          Report Period
-        </h2>
+      <Card title="Report Period" description="Time period for this report">
         <div className="flex items-center text-sm text-gray-600">
           <Calendar className="h-4 w-4 mr-2" />
           {formatDate(data.period.start)} - {formatDate(data.period.end)} (
           {data.period.days} days)
         </div>
-      </div>
+      </Card>
 
       {/* Summary Stats */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
-        <div className="bg-white p-6 rounded-lg shadow">
-          <div className="flex items-center">
-            <Calendar className="h-8 w-8 text-orange-600" />
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-500">
-                Total Bookings
-              </p>
-              <p className="text-2xl font-semibold text-gray-900">
-                {data.summary.totalBookings}
-              </p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-white p-6 rounded-lg shadow">
-          <div className="flex items-center">
-            <DollarSign className="h-8 w-8 text-green-600" />
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-500">Total Revenue</p>
-              <p className="text-2xl font-semibold text-gray-900">
-                {formatCurrency(data.summary.totalRevenue)}
-              </p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-white p-6 rounded-lg shadow">
-          <div className="flex items-center">
-            <CreditCard className="h-8 w-8 text-blue-600" />
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-500">Transactions</p>
-              <p className="text-2xl font-semibold text-gray-900">
-                {data.summary.totalTransactions}
-              </p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-white p-6 rounded-lg shadow">
-          <div className="flex items-center">
-            <Users className="h-8 w-8 text-purple-600" />
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-500">New Users</p>
-              <p className="text-2xl font-semibold text-gray-900">
-                {data.summary.totalUsers}
-              </p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-white p-6 rounded-lg shadow">
-          <div className="flex items-center">
-            <TrendingUp className="h-8 w-8 text-indigo-600" />
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-500">
-                Avg Booking Value
-              </p>
-              <p className="text-2xl font-semibold text-gray-900">
-                {formatCurrency(data.summary.averageBookingValue)}
-              </p>
-            </div>
-          </div>
-        </div>
+        <StatsCard
+          title="Total Bookings"
+          value={data.summary.totalBookings}
+          icon={Calendar}
+          iconColor="text-orange-600"
+          tooltip="Total number of bookings in the period"
+        />
+        <StatsCard
+          title="Total Revenue"
+          value={formatCurrency(data.summary.totalRevenue)}
+          icon={Banknote}
+          iconColor="text-green-600"
+          tooltip="Total revenue generated in the period"
+        />
+        <StatsCard
+          title="Transactions"
+          value={data.summary.totalTransactions}
+          icon={CreditCard}
+          iconColor="text-blue-600"
+          tooltip="Total number of transactions in the period"
+        />
+        <StatsCard
+          title="New Users"
+          value={data.summary.totalUsers}
+          icon={Users}
+          iconColor="text-purple-600"
+          tooltip="Number of new users registered in the period"
+        />
+        <StatsCard
+          title="Avg Booking Value"
+          value={formatCurrency(data.summary.averageBookingValue)}
+          icon={TrendingUp}
+          iconColor="text-indigo-600"
+          tooltip="Average value per booking in the period"
+        />
       </div>
 
       {/* Breakdown */}
@@ -605,9 +600,9 @@ function SummaryReportView({ data }: { data: ReportData }) {
 // Financial Report Component
 function FinancialReportView({ data }: { data: FinancialReportData }) {
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("en-US", {
+    return new Intl.NumberFormat("en-NG", {
       style: "currency",
-      currency: "USD",
+      currency: "NGN",
     }).format(amount);
   };
 
@@ -617,7 +612,7 @@ function FinancialReportView({ data }: { data: FinancialReportData }) {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
         <div className="bg-white p-6 rounded-lg shadow">
           <div className="flex items-center">
-            <DollarSign className="h-8 w-8 text-green-600" />
+            <Banknote className="h-8 w-8 text-green-600" />
             <div className="ml-4">
               <p className="text-sm font-medium text-gray-500">Total Revenue</p>
               <p className="text-2xl font-semibold text-gray-900">

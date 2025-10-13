@@ -1,8 +1,16 @@
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
+import { verifyAdminToken, createAuthErrorResponse } from "@/lib/admin-auth";
 
 export async function GET(request: NextRequest) {
   try {
+    // Verify admin authentication
+    const authResult = await verifyAdminToken(request);
+    if (!authResult.isValid) {
+      return createAuthErrorResponse(
+        authResult.error || "Authentication failed"
+      );
+    }
     // Get system settings and configuration
     const [
       systemStats,
@@ -122,6 +130,13 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    // Verify admin authentication
+    const authResult = await verifyAdminToken(request);
+    if (!authResult.isValid) {
+      return createAuthErrorResponse(
+        authResult.error || "Authentication failed"
+      );
+    }
     const body = await request.json();
     const { action, data } = body;
 

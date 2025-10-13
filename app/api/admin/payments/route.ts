@@ -1,8 +1,16 @@
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
+import { verifyAdminToken, createAuthErrorResponse } from "@/lib/admin-auth";
 
 export async function GET(request: NextRequest) {
   try {
+    // Verify admin authentication
+    const authResult = await verifyAdminToken(request);
+    if (!authResult.isValid) {
+      return createAuthErrorResponse(
+        authResult.error || "Authentication failed"
+      );
+    }
     const searchParams = request.nextUrl.searchParams;
     const page = parseInt(searchParams.get("page") || "1");
     const limit = parseInt(searchParams.get("limit") || "20");
@@ -43,10 +51,24 @@ export async function GET(request: NextRequest) {
     if (search) {
       whereClause.OR = [
         { transactionId: { contains: search, mode: "insensitive" } },
-        { booking: { bookingNumber: { contains: search, mode: "insensitive" } } },
-        { booking: { user: { email: { contains: search, mode: "insensitive" } } } },
-        { booking: { user: { firstName: { contains: search, mode: "insensitive" } } } },
-        { booking: { user: { lastName: { contains: search, mode: "insensitive" } } } },
+        {
+          booking: { bookingNumber: { contains: search, mode: "insensitive" } },
+        },
+        {
+          booking: {
+            user: { email: { contains: search, mode: "insensitive" } },
+          },
+        },
+        {
+          booking: {
+            user: { firstName: { contains: search, mode: "insensitive" } },
+          },
+        },
+        {
+          booking: {
+            user: { lastName: { contains: search, mode: "insensitive" } },
+          },
+        },
         { booking: { guestName: { contains: search, mode: "insensitive" } } },
         { booking: { guestEmail: { contains: search, mode: "insensitive" } } },
       ];
@@ -96,7 +118,7 @@ export async function GET(request: NextRequest) {
     ]);
 
     // Transform payments data
-    const transformedPayments = payments.map((payment) => ({
+    const transformedPayments = payments.map((payment: any) => ({
       id: payment.id,
       bookingId: payment.bookingId,
       userId: payment.userId,
@@ -109,16 +131,18 @@ export async function GET(request: NextRequest) {
       metadata: payment.metadata,
       createdAt: payment.createdAt,
       updatedAt: payment.updatedAt,
-      booking: payment.booking ? {
-        id: payment.booking.id,
-        bookingNumber: payment.booking.bookingNumber,
-        type: payment.booking.bookingType,
-        status: payment.booking.status,
-        customer: payment.booking.user
-          ? `${payment.booking.user.firstName} ${payment.booking.user.lastName}`
-          : payment.booking.guestName,
-        email: payment.booking.user?.email || payment.booking.guestEmail,
-      } : null,
+      booking: payment.booking
+        ? {
+            id: payment.booking.id,
+            bookingNumber: payment.booking.bookingNumber,
+            type: payment.booking.bookingType,
+            status: payment.booking.status,
+            customer: payment.booking.user
+              ? `${payment.booking.user.firstName} ${payment.booking.user.lastName}`
+              : payment.booking.guestName,
+            email: payment.booking.user?.email || payment.booking.guestEmail,
+          }
+        : null,
     }));
 
     // Get payment statistics
@@ -145,12 +169,12 @@ export async function GET(request: NextRequest) {
           pages: Math.ceil(totalCount / limit),
         },
         statistics: {
-          byStatus: paymentStats.map((stat) => ({
+          byStatus: paymentStats.map((stat: any) => ({
             status: stat.status,
             count: stat._count.id,
             totalAmount: Number(stat._sum.amount) || 0,
           })),
-          byMethod: methodStats.map((stat) => ({
+          byMethod: methodStats.map((stat: any) => ({
             method: stat.method,
             count: stat._count.id,
             totalAmount: Number(stat._sum.amount) || 0,
@@ -172,11 +196,18 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    // Verify admin authentication
+    const authResult = await verifyAdminToken(request);
+    if (!authResult.isValid) {
+      return createAuthErrorResponse(
+        authResult.error || "Authentication failed"
+      );
+    }
     const body = await request.json();
     const {
       bookingId,
       amount,
-      currency = "USD",
+      currency = "NGN",
       method,
       provider = "stripe",
       metadata,
@@ -216,7 +247,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Generate transaction ID
-    const transactionId = `txn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const transactionId = `txn_${Date.now()}_${Math.random()
+      .toString(36)
+      .substr(2, 9)}`;
 
     // Create new payment
     const newPayment = await prisma.payment.create({
@@ -264,7 +297,8 @@ export async function POST(request: NextRequest) {
           customer: newPayment.booking.user
             ? `${newPayment.booking.user.firstName} ${newPayment.booking.user.lastName}`
             : newPayment.booking.guestName,
-          email: newPayment.booking.user?.email || newPayment.booking.guestEmail,
+          email:
+            newPayment.booking.user?.email || newPayment.booking.guestEmail,
         },
       },
     });
@@ -282,15 +316,15 @@ export async function POST(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
+    // Verify admin authentication
+    const authResult = await verifyAdminToken(request);
+    if (!authResult.isValid) {
+      return createAuthErrorResponse(
+        authResult.error || "Authentication failed"
+      );
+    }
     const body = await request.json();
-    const {
-      paymentId,
-      status,
-      amount,
-      method,
-      provider,
-      metadata,
-    } = body;
+    const { paymentId, status, amount, method, provider, metadata } = body;
 
     if (!paymentId) {
       return NextResponse.json(
@@ -350,7 +384,9 @@ export async function PATCH(request: NextRequest) {
           customer: updatedPayment.booking.user
             ? `${updatedPayment.booking.user.firstName} ${updatedPayment.booking.user.lastName}`
             : updatedPayment.booking.guestName,
-          email: updatedPayment.booking.user?.email || updatedPayment.booking.guestEmail,
+          email:
+            updatedPayment.booking.user?.email ||
+            updatedPayment.booking.guestEmail,
         },
       },
     });
@@ -368,6 +404,13 @@ export async function PATCH(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
+    // Verify admin authentication
+    const authResult = await verifyAdminToken(request);
+    if (!authResult.isValid) {
+      return createAuthErrorResponse(
+        authResult.error || "Authentication failed"
+      );
+    }
     const searchParams = request.nextUrl.searchParams;
     const paymentId = searchParams.get("paymentId");
 
