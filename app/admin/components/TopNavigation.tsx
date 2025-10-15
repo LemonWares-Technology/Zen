@@ -19,6 +19,7 @@ export default function TopNavigation() {
           <button
             onClick={() => dispatch(toggleSidebar())}
             className="text-gray-500 hover:text-gray-600 p-2 rounded-md hover:bg-gray-100 lg:hidden"
+            aria-label="Toggle sidebar"
           >
             <Menu className="h-5 w-5" />
           </button>
