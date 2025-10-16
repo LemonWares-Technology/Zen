@@ -44,7 +44,7 @@ export default function AdminLayout({
       }
     };
 
-    // Set initial state
+    // Set initial state immediately
     handleResize();
 
     // Add resize listener
@@ -58,16 +58,10 @@ export default function AdminLayout({
   // Ensure sidebar is properly set when authenticated and not on login page
   useEffect(() => {
     if (isClient && isAuthenticated && !isLoginPage) {
-      const handleResize = () => {
-        if (window.innerWidth >= 1024) {
-          // Desktop: sidebar should be open
-          dispatch(setOpen(true));
-        } else {
-          // Mobile: sidebar should be closed
-          dispatch(setOpen(false));
-        }
-      };
-      handleResize();
+      // Ensure sidebar is open on desktop when authenticated
+      if (window.innerWidth >= 1024) {
+        dispatch(setOpen(true));
+      }
     }
   }, [isClient, isAuthenticated, isLoginPage, dispatch]);
 
