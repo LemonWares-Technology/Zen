@@ -16,8 +16,8 @@ async function fetchHotelImage(hotelName: string): Promise<string> {
 
   const data = await response.json();
 
-  console.log(`This is data: `, data)
-    
+  console.log(`This is data: `, data);
+
   if (data.results && data.results.length > 0) {
     return data.results[0].urls.small;
   }
@@ -99,6 +99,173 @@ export async function GET(request: NextRequest) {
   }
 }
 
+export async function POST(request: NextRequest) {
+  try {
+    const { destination, checkIn, checkOut, rooms, guests } =
+      await request.json();
+
+    if (!destination || !checkIn || !checkOut) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "Missing required parameters: destination, checkIn, checkOut",
+        },
+        { status: 400 }
+      );
+    }
+
+    const token = await getAmadeusToken();
+
+    // First, search for hotels by city code
+    const locationResponse = await fetch(
+      `${baseURL}/v1/reference-data/locations?keyword=${encodeURIComponent(
+        destination
+      )}&subType=CITY`,
+      {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    if (!locationResponse.ok) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Unable to find location. Please try a different city name.",
+        },
+        { status: 400 }
+      );
+    }
+
+    const locationData = await locationResponse.json();
+
+    if (!locationData.data || locationData.data.length === 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "No hotels found for this destination.",
+        },
+        { status: 404 }
+      );
+    }
+
+    const cityCode = locationData.data[0].iataCode;
+
+    // Now search for hotels in that city
+    const hotelListResponse = await fetch(
+      `${baseURL}/v1/reference-data/locations/hotels/by-city?cityCode=${cityCode}`,
+      {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    if (!hotelListResponse.ok) {
+      const errorDetail = await hotelListResponse.text();
+      return NextResponse.json(
+        {
+          success: false,
+          message: `Error fetching hotels: ${errorDetail}`,
+        },
+        { status: hotelListResponse.status }
+      );
+    }
+
+    const hotelListData = await hotelListResponse.json();
+
+    if (!hotelListData.data || hotelListData.data.length === 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "No hotels found in this city.",
+        },
+        { status: 404 }
+      );
+    }
+
+    // Get hotel IDs (limit to first 10 for performance)
+    const hotelIds = hotelListData.data
+      .slice(0, 10)
+      .map((hotel: any) => hotel.hotelId)
+      .join(",");
+
+    // Now get hotel offers with pricing
+    const queryParams = new URLSearchParams({
+      hotelIds,
+      adults: (guests || 1).toString(),
+      checkInDate: checkIn,
+      checkOutDate: checkOut,
+      roomQuantity: (rooms || 1).toString(),
+      currency: "USD",
+    });
+
+    const offersResponse = await fetch(
+      `${baseURL}/v3/shopping/hotel-offers?${queryParams}`,
+      {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    if (!offersResponse.ok) {
+      const errorDetail = await offersResponse.text();
+      return NextResponse.json(
+        {
+          success: false,
+          message: `Error fetching offers: ${errorDetail}`,
+        },
+        { status: offersResponse.status }
+      );
+    }
+
+    const offersData = await offersResponse.json();
+
+    // Enrich each hotel with images
+    if (offersData.data) {
+      for (const offer of offersData.data) {
+        const hotelName = offer.hotel?.name || "";
+        const imageUrl = await fetchHotelImage(hotelName);
+        offer.hotel.customImageUrl = imageUrl;
+      }
+    }
+
+    return NextResponse.json(
+      {
+        success: true,
+        message: "Hotel search successful",
+        data: offersData.data || [],
+        searchParams: {
+          destination,
+          checkIn,
+          checkOut,
+          rooms: rooms || 1,
+          guests: guests || 1,
+          cityCode,
+        },
+      },
+      { status: 200 }
+    );
+  } catch (error: any) {
+    console.error("Error occurred during hotel search:", error);
+    return NextResponse.json(
+      {
+        success: false,
+        message: `Internal server error: ${error.message || error}`,
+      },
+      { status: 500 }
+    );
+  }
+}
 
 // import getAmadeusToken, { baseURL } from "@/lib/functions";
 // import { NextRequest, NextResponse } from "next/server";
@@ -222,5 +389,3 @@ export async function GET(request: NextRequest) {
 //     );
 //   }
 // }
-
-
