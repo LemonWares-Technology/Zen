@@ -71,14 +71,26 @@ export async function POST(request: NextRequest) {
     const { password: _, ...userWithoutPassword } = user;
 
     return NextResponse.json(
-      { message: `Login successful`, user: userWithoutPassword, ...tokens },
+      {
+        success: true,
+        message: `Login successful`,
+        data: {
+          user: userWithoutPassword,
+          accessToken: tokens.accessToken,
+          refreshToken: tokens.refreshToken,
+        },
+      },
       { status: 200 }
     );
   } catch (error: any) {
-    console.error(`Error occured during login:`, error);
+    console.error(`Error logging in:`, error);
 
     return NextResponse.json(
-      { message: `Internal server error:`, error },
+      {
+        success: false,
+        message: `Internal server error`,
+        error: error.message,
+      },
       { status: 500 }
     );
   }

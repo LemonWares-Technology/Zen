@@ -19,9 +19,13 @@ export async function POST(request: NextRequest) {
     const user = await prisma.user.findUnique({ where: { email } });
 
     if (!user) {
-      return NextResponse.json({
-        message: `If email exists, a reset link has been sent.`,
-      });
+      return NextResponse.json(
+        {
+          success: true,
+          message: `If email exists, a reset link has been sent.`,
+        },
+        { status: 200 }
+      );
     }
 
     const resetToken: any = generateSecureToken();
@@ -36,10 +40,14 @@ export async function POST(request: NextRequest) {
 
     const resetLink = `${process.env.URL}/reset-password?token=${resetToken}`;
 
-    return NextResponse.json({
-      message: `If the email exists, a reset link has been sent`,
-      token: resetToken,
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        message: `If the email exists, a reset link has been sent`,
+        token: resetToken,
+      },
+      { status: 200 }
+    );
   } catch (error: any) {
     console.error(`Error occured during password forget: ${error}`);
 

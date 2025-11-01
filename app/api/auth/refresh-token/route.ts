@@ -47,12 +47,17 @@ export async function POST(request: NextRequest) {
       }),
     ]);
 
-    return {
-      success: true,
-      ...tokens,
-    };
-
-      
+    return NextResponse.json(
+      {
+        success: true,
+        data: {
+          accessToken: tokens.accessToken,
+          refreshToken: tokens.refreshToken,
+        },
+        message: "Token refreshed successfully",
+      },
+      { status: 200 }
+    );
   } catch (error: any) {
     console.error(`Error occured during token refresh: ${error}`);
 

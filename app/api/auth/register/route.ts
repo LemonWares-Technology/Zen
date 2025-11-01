@@ -1,11 +1,8 @@
-
-
 import { generateSecureToken, generateTokens } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Role } from "@prisma/client";
 import { hash } from "bcryptjs";
 import { NextRequest, NextResponse } from "next/server";
-
 
 export async function POST(request: NextRequest) {
   try {
@@ -45,7 +42,7 @@ export async function POST(request: NextRequest) {
         firstName: true,
         lastName: true,
         isVerified: true,
-        tokens: true
+        tokens: true,
       },
     });
 
@@ -60,28 +57,34 @@ export async function POST(request: NextRequest) {
       },
     });
 
-
-    
     const verificationLink = `${process.env.FRONTEND_URL}/verify-email?token=${verificationToken}`;
 
     // My Send Email Controller would go here.
 
     const tokens = generateTokens(user.id, user.email);
 
-
-
-    return NextResponse.json({
-      message: `Registration successful. Please check your email to verify your account.`,
-      token: verificationToken,
-      user,
-      ...tokens,
-    });
-
+    return NextResponse.json(
+      {
+        success: true,
+        message: `Registration successful. Please check your email to verify your account.`,
+        data: {
+          user,
+          accessToken: tokens.accessToken,
+          refreshToken: tokens.refreshToken,
+          verificationToken,
+        },
+      },
+      { status: 201 }
+    );
   } catch (error: any) {
     console.error(`Error registering account:`, error);
 
     return NextResponse.json(
-      { message: `Internal server error:`, error },
+      {
+        success: false,
+        message: `Internal server error`,
+        error: error.message,
+      },
       { status: 500 }
     );
   }
