@@ -119,15 +119,15 @@
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 
-export async function POST (request: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
     const { token } = await request.json();
 
     if (!token) {
       return NextResponse.json(
         { message: `Missing required parameter: [ Token ]` },
-        {status: 400}
-      )
+        { status: 400 }
+      );
     }
 
     const token_record = await prisma.token.findFirst({
@@ -141,7 +141,10 @@ export async function POST (request: NextRequest) {
     });
 
     if (!token_record) {
-      return NextResponse.json({ message: `Invalid or expired token` });
+      return NextResponse.json(
+        { success: false, message: `Invalid or expired token` },
+        { status: 400 }
+      );
     }
 
     await prisma.$transaction([
@@ -161,10 +164,9 @@ export async function POST (request: NextRequest) {
     ]);
 
     return NextResponse.json(
-      { message: `Email verified successfully` },
+      { success: true, message: `Email verified successfully` },
       { status: 200 }
     );
-
   } catch (error: any) {
     console.error(`Error occured during email verification:`, error);
 

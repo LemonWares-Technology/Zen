@@ -23,7 +23,10 @@ export async function POST(request: NextRequest) {
     });
 
     if (!tokenRecord) {
-      return NextResponse.json({ message: `Invalid or expired token` }, {status: 403});
+      return NextResponse.json(
+        { success: false, message: `Invalid or expired token` },
+        { status: 403 }
+      );
     }
 
     const hashedPassword = await hash(newPassword, 12);
@@ -40,13 +43,10 @@ export async function POST(request: NextRequest) {
       }),
     ]);
 
-
     return NextResponse.json(
-      { message: `Password reset successfully` },
-      {status: 200}
-    )
-
-
+      { success: true, message: `Password reset successfully` },
+      { status: 200 }
+    );
   } catch (error: any) {
     console.error(`Error occured during password reset: ${error}`);
 

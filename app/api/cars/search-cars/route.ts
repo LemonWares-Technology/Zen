@@ -2,11 +2,16 @@ import getAmadeusToken, { baseURL } from "@/lib/functions";
 import { NextRequest, NextResponse } from "next/server";
 
 // Helper function to resolve IATA code from location name
-async function resolveLocationCode(locationName: string, token: string): Promise<string | null> {
+async function resolveLocationCode(
+  locationName: string,
+  token: string
+): Promise<string | null> {
   try {
     // First, try with the exact location name
     let response = await fetch(
-      `${baseURL}/v1/reference-data/locations?keyword=${encodeURIComponent(locationName)}&subType=AIRPORT,CITY`,
+      `${baseURL}/v1/reference-data/locations?keyword=${encodeURIComponent(
+        locationName
+      )}&subType=AIRPORT,CITY`,
       {
         method: "GET",
         headers: {
@@ -22,13 +27,17 @@ async function resolveLocationCode(locationName: string, token: string): Promise
     }
 
     let data = await response.json();
-    console.log(`Search results for "${locationName}":`, data.data?.length || 0, "results");
-    
+    console.log(
+      `Search results for "${locationName}":`,
+      data.data?.length || 0,
+      "results"
+    );
+
     if (data.data && data.data.length > 0) {
       // Prefer airport codes, fallback to city codes
       const airport = data.data.find((loc: any) => loc.subType === "AIRPORT");
       const city = data.data.find((loc: any) => loc.subType === "CITY");
-      
+
       const result = (airport || city)?.iataCode;
       if (result) {
         console.log(`Found IATA code: ${result} for "${locationName}"`);
@@ -38,16 +47,18 @@ async function resolveLocationCode(locationName: string, token: string): Promise
 
     // If no results, try common variations
     const variations = [
-      locationName.replace(/airport/i, '').trim(),
-      locationName.replace(/international/i, '').trim(),
-      locationName.replace(/airport|international/i, '').trim(),
+      locationName.replace(/airport/i, "").trim(),
+      locationName.replace(/international/i, "").trim(),
+      locationName.replace(/airport|international/i, "").trim(),
     ];
 
     for (const variation of variations) {
       if (variation && variation !== locationName) {
         console.log(`Trying variation: "${variation}"`);
         response = await fetch(
-          `${baseURL}/v1/reference-data/locations?keyword=${encodeURIComponent(variation)}&subType=AIRPORT,CITY`,
+          `${baseURL}/v1/reference-data/locations?keyword=${encodeURIComponent(
+            variation
+          )}&subType=AIRPORT,CITY`,
           {
             method: "GET",
             headers: {
@@ -60,19 +71,23 @@ async function resolveLocationCode(locationName: string, token: string): Promise
         if (response.ok) {
           data = await response.json();
           if (data.data && data.data.length > 0) {
-            const airport = data.data.find((loc: any) => loc.subType === "AIRPORT");
+            const airport = data.data.find(
+              (loc: any) => loc.subType === "AIRPORT"
+            );
             const city = data.data.find((loc: any) => loc.subType === "CITY");
-            
+
             const result = (airport || city)?.iataCode;
             if (result) {
-              console.log(`Found IATA code: ${result} for variation "${variation}"`);
+              console.log(
+                `Found IATA code: ${result} for variation "${variation}"`
+              );
               return result;
             }
           }
         }
       }
     }
-    
+
     console.log(`No IATA code found for "${locationName}"`);
     return null;
   } catch (error) {
@@ -83,21 +98,22 @@ async function resolveLocationCode(locationName: string, token: string): Promise
 
 export async function POST(request: NextRequest) {
   try {
-    const { 
-      fromLocation,      // User-friendly: "Paris", "Los Angeles", "CDG Airport"
-      toAddress,         // User-friendly: "123 Main Street, Paris"
-      toCity,            // User-friendly: "Paris"
-      toCountry,         // User-friendly: "France" or "FR"
-      pickupDateTime,    // User-friendly: "2024-01-15T10:30:00"
-      passengers,        // Simple number: 2
-      transferType = "PRIVATE" // Optional: "PRIVATE" or "SHARED"
+    const {
+      fromLocation, // User-friendly: "Paris", "Los Angeles", "CDG Airport"
+      toAddress, // User-friendly: "123 Main Street, Paris"
+      toCity, // User-friendly: "Paris"
+      toCountry, // User-friendly: "France" or "FR"
+      pickupDateTime, // User-friendly: "2024-01-15T10:30:00"
+      passengers, // Simple number: 2
+      transferType = "PRIVATE", // Optional: "PRIVATE" or "SHARED"
     } = await request.json();
 
     // Validate required fields
     if (!fromLocation || !toAddress || !toCity || !pickupDateTime) {
       return NextResponse.json(
-        { 
-          message: "Missing required fields: fromLocation, toAddress, toCity, pickupDateTime" 
+        {
+          message:
+            "Missing required fields: fromLocation, toAddress, toCity, pickupDateTime",
         },
         { status: 400 }
       );
@@ -107,56 +123,58 @@ export async function POST(request: NextRequest) {
 
     // Resolve IATA code for the starting location
     let startLocationCode = await resolveLocationCode(fromLocation, token);
-    
+
     if (!startLocationCode) {
       // Try common airport codes as fallback
       const commonAirports: { [key: string]: string } = {
-        "cdg": "CDG",
+        cdg: "CDG",
         "cdg airport": "CDG",
         "charles de gaulle": "CDG",
         "charles de gaulle airport": "CDG",
         "paris cdg": "CDG",
-        "paris": "CDG",
-        "lax": "LAX",
+        paris: "CDG",
+        lax: "LAX",
         "lax airport": "LAX",
         "los angeles": "LAX",
         "los angeles international": "LAX",
-        "jfk": "JFK",
+        jfk: "JFK",
         "jfk airport": "JFK",
         "new york": "JFK",
         "new york jfk": "JFK",
-        "lhr": "LHR",
+        lhr: "LHR",
         "lhr airport": "LHR",
-        "london": "LHR",
+        london: "LHR",
         "london heathrow": "LHR",
-        "frankfurt": "FRA",
+        frankfurt: "FRA",
         "frankfurt airport": "FRA",
-        "miami": "MIA",
+        miami: "MIA",
         "miami international": "MIA",
-        "chicago": "ORD",
+        chicago: "ORD",
         "chicago o'hare": "ORD",
-        "atlanta": "ATL",
+        atlanta: "ATL",
         "atlanta airport": "ATL",
-        "dubai": "DXB",
+        dubai: "DXB",
         "dubai international": "DXB",
-        "singapore": "SIN",
+        singapore: "SIN",
         "singapore changi": "SIN",
-        "tokyo": "NRT",
+        tokyo: "NRT",
         "tokyo narita": "NRT",
-        "sydney": "SYD",
-        "sydney airport": "SYD"
+        sydney: "SYD",
+        "sydney airport": "SYD",
       };
-      
+
       const normalizedLocation = fromLocation.toLowerCase().trim();
       const fallbackCode = commonAirports[normalizedLocation];
-      
+
       if (fallbackCode) {
-        console.log(`Using fallback code: ${fallbackCode} for "${fromLocation}"`);
+        console.log(
+          `Using fallback code: ${fallbackCode} for "${fromLocation}"`
+        );
         startLocationCode = fallbackCode;
       } else {
         return NextResponse.json(
-          { 
-            message: `Could not find location code for: ${fromLocation}. Please try a more specific location name or use the IATA code directly (e.g., "CDG", "LAX", "JFK")` 
+          {
+            message: `Could not find location code for: ${fromLocation}. Please try a more specific location name or use the IATA code directly (e.g., "CDG", "LAX", "JFK")`,
           },
           { status: 400 }
         );
@@ -168,27 +186,29 @@ export async function POST(request: NextRequest) {
     if (countryCode && countryCode.length > 2) {
       // Simple mapping for common countries - you can expand this
       const countryMap: { [key: string]: string } = {
-        "france": "FR",
+        france: "FR",
         "united states": "US",
         "united kingdom": "GB",
-        "germany": "DE",
-        "spain": "ES",
-        "italy": "IT",
-        "netherlands": "NL",
-        "canada": "CA",
-        "australia": "AU",
-        "japan": "JP"
+        germany: "DE",
+        spain: "ES",
+        italy: "IT",
+        netherlands: "NL",
+        canada: "CA",
+        australia: "AU",
+        japan: "JP",
       };
       countryCode = countryMap[countryCode.toLowerCase()] || countryCode;
     }
 
     // Get geocodes for the destination address using multiple approaches
     let endGeoCode = null;
-    
+
     // Try 1: Search by full address
     try {
       const geocodeResponse = await fetch(
-        `${baseURL}/v1/reference-data/locations?keyword=${encodeURIComponent(toAddress)}&subType=ADDRESS&countryCode=${countryCode || "US"}`,
+        `${baseURL}/v1/reference-data/locations?keyword=${encodeURIComponent(
+          toAddress
+        )}&subType=ADDRESS&countryCode=${countryCode || "US"}`,
         {
           method: "GET",
           headers: {
@@ -200,8 +220,11 @@ export async function POST(request: NextRequest) {
 
       if (geocodeResponse.ok) {
         const geocodeData = await geocodeResponse.json();
-        console.log("Geocode search response:", JSON.stringify(geocodeData, null, 2));
-        
+        console.log(
+          "Geocode search response:",
+          JSON.stringify(geocodeData, null, 2)
+        );
+
         if (geocodeData.data && geocodeData.data.length > 0) {
           const location = geocodeData.data[0];
           if (location.geoCode) {
@@ -218,7 +241,9 @@ export async function POST(request: NextRequest) {
     if (!endGeoCode) {
       try {
         const cityGeocodeResponse = await fetch(
-          `${baseURL}/v1/reference-data/locations?keyword=${encodeURIComponent(toCity)}&subType=CITY&countryCode=${countryCode || "US"}`,
+          `${baseURL}/v1/reference-data/locations?keyword=${encodeURIComponent(
+            toCity
+          )}&subType=CITY&countryCode=${countryCode || "US"}`,
           {
             method: "GET",
             headers: {
@@ -230,8 +255,11 @@ export async function POST(request: NextRequest) {
 
         if (cityGeocodeResponse.ok) {
           const cityGeocodeData = await cityGeocodeResponse.json();
-          console.log("City geocode search response:", JSON.stringify(cityGeocodeData, null, 2));
-          
+          console.log(
+            "City geocode search response:",
+            JSON.stringify(cityGeocodeData, null, 2)
+          );
+
           if (cityGeocodeData.data && cityGeocodeData.data.length > 0) {
             const location = cityGeocodeData.data[0];
             if (location.geoCode) {
@@ -248,23 +276,23 @@ export async function POST(request: NextRequest) {
     // Try 3: Use known coordinates for common destinations
     if (!endGeoCode) {
       const knownCoordinates: { [key: string]: string } = {
-        "paris": "48.8566,2.3522",
-        "london": "51.5074,-0.1278",
+        paris: "48.8566,2.3522",
+        london: "51.5074,-0.1278",
         "new york": "40.7128,-74.0060",
         "los angeles": "34.0522,-118.2437",
-        "frankfurt": "50.1109,8.6821",
-        "miami": "25.7617,-80.1918",
-        "chicago": "41.8781,-87.6298",
-        "atlanta": "33.7490,-84.3880",
-        "dubai": "25.2048,55.2708",
-        "singapore": "1.3521,103.8198",
-        "tokyo": "35.6762,139.6503",
-        "sydney": "-33.8688,151.2093"
+        frankfurt: "50.1109,8.6821",
+        miami: "25.7617,-80.1918",
+        chicago: "41.8781,-87.6298",
+        atlanta: "33.7490,-84.3880",
+        dubai: "25.2048,55.2708",
+        singapore: "1.3521,103.8198",
+        tokyo: "35.6762,139.6503",
+        sydney: "-33.8688,151.2093",
       };
-      
+
       const normalizedCity = toCity.toLowerCase().trim();
       const knownGeoCode = knownCoordinates[normalizedCity];
-      
+
       if (knownGeoCode) {
         endGeoCode = knownGeoCode;
         console.log(`Using known geocode for ${toCity}: ${endGeoCode}`);
@@ -341,28 +369,29 @@ export async function POST(request: NextRequest) {
         description: offer.vehicle?.description,
         imageUrl: offer.vehicle?.imageURL,
         baggage: offer.vehicle?.baggages?.[0]?.count || 0,
-        seats: offer.vehicle?.seats?.[0]?.count || 0
+        seats: offer.vehicle?.seats?.[0]?.count || 0,
       },
       provider: {
         name: offer.serviceProvider?.name,
-        logoUrl: offer.serviceProvider?.logoUrl
+        logoUrl: offer.serviceProvider?.logoUrl,
       },
       price: {
         total: offer.quotation?.monetaryAmount,
         currency: offer.quotation?.currencyCode,
-        taxes: offer.quotation?.totalTaxes?.monetaryAmount
+        taxes: offer.quotation?.totalTaxes?.monetaryAmount,
       },
       pickup: {
         location: offer.start?.locationCode,
-        dateTime: offer.start?.dateTime
+        dateTime: offer.start?.dateTime,
       },
       dropoff: {
         address: offer.end?.address?.line,
         city: offer.end?.address?.cityName,
-        dateTime: offer.end?.dateTime
+        dateTime: offer.end?.dateTime,
       },
-      cancellation: offer.cancellationRules?.[0]?.ruleDescription || "Check provider terms",
-      paymentMethods: offer.methodsOfPaymentAccepted
+      cancellation:
+        offer.cancellationRules?.[0]?.ruleDescription || "Check provider terms",
+      paymentMethods: offer.methodsOfPaymentAccepted,
     }));
 
     return NextResponse.json(
@@ -373,8 +402,8 @@ export async function POST(request: NextRequest) {
           from: fromLocation,
           to: `${toAddress}, ${toCity}`,
           pickupTime: pickupDateTime,
-          passengers: passengers || 1
-        }
+          passengers: passengers || 1,
+        },
       },
       { status: 200 }
     );
