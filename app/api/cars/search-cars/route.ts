@@ -331,9 +331,36 @@ export async function POST(request: NextRequest) {
     if (!response.ok) {
       const errorText = await response.text();
       console.error("Amadeus API Error:", errorText);
+
+      // Parse error for better user message
+      let userMessage = `Car search error: ${response.statusText}`;
+      try {
+        const errorJson = JSON.parse(errorText);
+        if (errorJson.errors && errorJson.errors.length > 0) {
+          const firstError = errorJson.errors[0];
+          if (firstError.detail) {
+            userMessage = firstError.detail;
+          } else if (firstError.title) {
+            userMessage = firstError.title;
+          }
+
+          // Provide helpful messages for common errors
+          if (
+            errorJson.errors.some(
+              (e: any) => e.code === "32171" || e.code === "477"
+            )
+          ) {
+            userMessage =
+              "No transfer services available for the selected route. Please try:\n- Selecting a city center or hotel address as destination\n- Choosing a different pickup or dropoff location\n- Adjusting your travel date";
+          }
+        }
+      } catch (e) {
+        // Keep default message if JSON parsing fails
+      }
+
       return NextResponse.json(
         {
-          message: `Car search error: ${response.statusText}`,
+          message: userMessage,
           error: errorText,
         },
         { status: response.status }
@@ -351,11 +378,36 @@ export async function POST(request: NextRequest) {
       offers = data;
     } else if (data.offers && Array.isArray(data.offers)) {
       offers = data.offers;
+    } else if (data.meta || data.dictionaries) {
+      // Amadeus sometimes returns metadata even with empty results
+      offers = [];
+      console.log("Received Amadeus response with metadata but no offers");
     } else {
-      console.error("Unexpected response structure:", data);
+      console.error(
+        "Unexpected response structure:",
+        JSON.stringify(data, null, 2)
+      );
+      // Return empty array instead of error if structure is unexpected but response was 200
+      offers = [];
+    }
+
+    // Check if no offers were found
+    if (offers.length === 0) {
+      console.log("No transfer offers available for this route");
       return NextResponse.json(
-        { message: "Unexpected response format from car search API" },
-        { status: 500 }
+        {
+          message: "No transfer services available for the selected route",
+          suggestion:
+            "Try selecting a different destination, a hotel address, or a popular city location.",
+          data: [],
+          searchInfo: {
+            from: fromLocation,
+            to: `${toAddress}, ${toCity}`,
+            pickupTime: pickupDateTime,
+            passengers: passengers || 1,
+          },
+        },
+        { status: 200 }
       );
     }
 
