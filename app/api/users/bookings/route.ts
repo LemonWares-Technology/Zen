@@ -69,14 +69,6 @@ export async function GET(request: NextRequest) {
               createdAt: true,
             },
           },
-          reviews: {
-            select: {
-              id: true,
-              rating: true,
-              comment: true,
-              createdAt: true,
-            },
-          },
         },
         orderBy: {
           createdAt: "desc",
